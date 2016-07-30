@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Chat Async</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" media="screen" title="no title" charset="utf-8">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css" media="screen" title="no title" charset="utf-8">
+    <link rel="stylesheet" href="/css/style.css" charset="utf-8">
+    <style media="screen">
+      [ng-cloak] {
+        display: none !important;
+      }
+    </style>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/systemjs/0.19.32/system.js" charset="utf-8"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/systemjs/0.19.32/system-polyfills.js" charset="utf-8"></script>
+  </head>
+  <body class="ui-app" ui-view>
+    <div class="row">
+      <div class="loader center-block">
+        <i class="fa fa-spinner fa-spin"></i> Loading...
+      </div>
+    </div>
+    <!-- SystemJS config and application bootstrap -->
+    <script src="/js/system.config.js" charset="utf-8"></script>
+    <script>
+    System.import('boot')
+    </script>
+  </body>
+</html>

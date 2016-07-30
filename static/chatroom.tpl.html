@@ -1,0 +1,36 @@
+<div class="ui-chatroom row">
+  <h2 class="col-md-12">Chat room</h2>
+
+  <div class="col-md-4">
+    <div class="list-group">
+      <div ng-repeat="friend in friends"
+           class="list-group-item">
+        <span ng-click="startChattingWithFriend(friend)"
+              ng-bind="friend.username"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-8">
+    <div class="panel panel-chat">
+      <div class="message">
+        <div class="message-toolbox">
+          <button ng-click="sendChatMessage(message)"
+              class="btn btn-success btn-block">Send</button>
+        </div>
+        <div class="message-text">
+          <textarea ng-model="message" name="name" rows="3"></textarea>
+        </div>
+      </div>
+      <div class="conversation">
+        <div class="conversation-item clearfix" ng-repeat="item in messages">
+          <div class="message-from-user pull-left">
+            <img ng-src="{{'https://placeholdit.imgix.net/~text?txtsize=16&txt=' + item.from_user +'&w=64&h=64'}}"
+                 alt="{{item.from_user}}">
+          </div>
+          <div class="message-text" ng-bind="item.text"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

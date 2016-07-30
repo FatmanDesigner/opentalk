@@ -1,0 +1,51 @@
+.loader {
+  width: 200px;
+}
+
+.ui-login {
+  padding-top: 3em;
+}
+
+.message {
+
+}
+
+.message-text {
+  width: auto;
+  overflow: auto;
+}
+
+.message-text textarea {
+  width: 100%;
+
+  resize: none;
+}
+
+.message-toolbox {
+  float: right;
+  width: 128px;
+  padding-left: 15px;
+}
+
+/* Conversation */
+.conversation {
+
+}
+
+.conversation-item {
+  padding-bottom: 1em;
+}
+
+.message-from-user {
+  display: block;
+  width: 64px;
+  height: 64px;
+}
+
+.message-from-user.pull-left {
+  margin-right: 1em;
+}
+
+.message-text {
+  overflow: auto;
+}
