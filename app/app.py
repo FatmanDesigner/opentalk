@@ -1,10 +1,13 @@
 from os import path
-from time import sleep
+from time import time
 
+from tornado.concurrent import Future
 from tornado.escape import json_decode, json_encode
 
 import tornado.ioloop
 import tornado.web
+from tornado import gen
+from tornado.web import asynchronous
 
 from db import Db
 
@@ -50,6 +53,7 @@ class FriendsHandler(tornado.web.RequestHandler):
         else:
             return None
 
+    @gen.coroutine
     def get(self):
         current_user_id = self.get_current_user()
         users = self.application.db.find_users(friends_of_user=current_user_id)
@@ -72,8 +76,12 @@ class ConversationHandler(tornado.web.RequestHandler):
     POST should indicate
     - message text
     """
+    waiters = set()
+
     def __init__(self, application, request):
         super().__init__(application, request)
+
+        self.set_header('Content-Type', 'application/json')
 
     def get_current_user(self):
         user_id  = self.get_secure_cookie('user')
@@ -82,23 +90,38 @@ class ConversationHandler(tornado.web.RequestHandler):
         else:
             return None
 
+    @gen.coroutine
     def get(self):
-        conversation_id = self.get_query_argument('conversation_id', None)
+        print('[ConversationHandler.get] Start at {}'.format(time()))
+
+        conversation_id = self.get_query_argument('inbox', None)
         marker = self.get_query_argument('marker', None)
 
         if marker:
             print('[ConversationHandler] Getting messages for conversation {} from marker #{}'.format(conversation_id, marker))
+            future = Future()
+            ConversationHandler.waiters.add((future, int(marker)))
+
+            future.add_done_callback(self.callback_get_messages)
+            yield future
         else:
             print('[ConversationHandler] Getting messages for conversation {}'.format(conversation_id))
+            messages = yield self.application.db.find_messages(conversation_id)
 
-        messages = self.application.db.find_messages(conversation_id)
+            self.write(json_encode({
+                'ok': True,
+                'messages': [item.to_dict() for item in messages]
+            }))
+            print('[ConversationHandler.get] End at {}'.format(time()))
 
-        self.set_header('Content-Type', 'application/json')
+    def callback_get_messages(self, future_result):
         self.write(json_encode({
             'ok': True,
-            'messages': [item.to_dict() for item in messages]
+            'messages': [item.to_dict() for item in future_result.result()]
         }))
+        print('[ConversationHandler.get] End at {}'.format(time()))
 
+    @gen.coroutine
     def post(self):
         current_user_id = self.get_current_user()
         inbox = self.get_query_argument('inbox', None)
@@ -110,6 +133,12 @@ class ConversationHandler(tornado.web.RequestHandler):
 
         self.set_header('Content-Type', 'application/json')
         self.write(json_encode('ok'))
+
+        for (future, marker) in ConversationHandler.waiters:
+            messages = yield self.application.db.find_messages(inbox, marker)
+            future.set_result(messages)
+
+        ConversationHandler.waiters.clear()
 
 
 class Application(tornado.web.Application):
@@ -129,13 +158,14 @@ def make_app():
     db = Db('sqlite:///' + database_path)
     db.create_all()
 
-    return Application([
-        (r"/api", ApiHandler),
-        (r"/api/auth", AuthHandler),
-        (r"/api/friends", FriendsHandler),
-        (r"/api/chats", ConversationHandler),
-        (r"/(.*)", tornado.web.StaticFileHandler, {"path": static_dir, "default_filename": "index.html"}),
-    ],
+    return Application(
+        [
+            (r"/api", ApiHandler),
+            (r"/api/auth", AuthHandler),
+            (r"/api/friends", FriendsHandler),
+            (r"/api/chats", ConversationHandler),
+            (r"/(.*)", tornado.web.StaticFileHandler, {"path": static_dir, "default_filename": "index.html"}),
+        ],
         debug=True,
         db=db,
         cookie_secret='s3cr3t')

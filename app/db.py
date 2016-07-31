@@ -1,8 +1,16 @@
 import datetime
+from time import time
 
 from sqlalchemy import *
 from sqlalchemy.orm import *
 import sqlalchemy.ext.declarative
+
+from tornado import gen
+from tornado.concurrent import Future
+from tornado.gen import Return
+from tornado.ioloop import IOLoop
+
+from concurrent.futures import ThreadPoolExecutor
 
 Base = sqlalchemy.ext.declarative.declarative_base()
 
@@ -30,6 +38,8 @@ class Message(Base):
                     created_at=str(self.created_at),
                     text=self.text)
 
+
+
 class Db(object):
     """
     Connection
@@ -42,6 +52,8 @@ class Db(object):
 
         self.sessionmaker = scoped_session(sessionmaker(bind=self.engine))
         Base.metadata.bind = self.engine
+
+        self.executor = ThreadPoolExecutor(8)
 
     def create_all(self):
         Base.metadata.create_all()
@@ -67,10 +79,19 @@ class Db(object):
 
         return True
 
+    @gen.coroutine
     def find_messages(self, inbox, marker=None):
-        session = self.sessionmaker()
-        messages = session.query(Message).all()
+        print('[find_messages] Start at {}'.format(time()))
 
+        session = self.sessionmaker()
+
+        if marker is None:
+            messages = session.query(Message).all()
+        else:
+            last_time = datetime.datetime.utcfromtimestamp(marker/1000)
+            messages = session.query(Message).filter(Message.created_at > last_time).all()
+
+        print('[find_messages] End at {}'.format(time()))
         return [message for message in messages]
 
     def create_message(self, from_user, inbox, message):

@@ -38,6 +38,13 @@ function ChatroomCtrl ($rootScope, $scope, $sessionStorage, $http) {
     let promise = $http.post(`/api/chats?inbox=${$scope.currentConversationID}`, message);
     promise.then((response) => {
       console.log(response);
+
+      if ($scope.message === message) {
+        $scope.message = '';
+      }
+      else {
+        console.warn(`[ChatroomCtrl] Current message has changed. Cannot clear`);
+      }
     });
   };
 
@@ -62,7 +69,42 @@ function ChatroomCtrl ($rootScope, $scope, $sessionStorage, $http) {
 
       console.info(`[ChatroomCtrl.showConversation] Showing conversation with ${messages.length} messages...`);
       $scope.messages = messages;
-    })
+    });
+
+    promise.then(function () {
+      getConversationStream(conversationID);
+    });
+  }
+
+  function getConversationStream (conversationID, marker) {
+    console.log(`[getConversationStream] Waiting for more messages...`);
+    var promise = $http.get(`/api/chats`, {
+      params: {
+        inbox: conversationID,
+        marker: marker || Date.now()
+      }
+    });
+
+    promise.then((response) => {
+      let messages;
+
+      try {
+        if (!('messages' in response.data)) {
+          console.warn(`[getConversationStream] Could not find messages in returned data`);
+
+          return;
+        }
+        messages = response.data.messages;
+
+        console.log(`[getConversationStream] Retrieved ${messages.length} messages.`);
+        $scope.messages = $scope.messages.concat(messages);
+
+        getConversationStream(conversationID, Date.now());
+      }
+      catch (e) {
+        console.error(e);
+      }
+    });
   }
   /**
    * Create a conversation ID (aka, inbox) for 2 or more users.
