@@ -1,22 +1,22 @@
 from os import path
 from time import time
+import calendar
 
 from tornado.concurrent import Future
 from tornado.escape import json_decode, json_encode
 
 import tornado.ioloop
-import tornado.web
-from tornado import gen
-from tornado.web import asynchronous
+from tornado import gen, web
+from tornado.iostream import StreamClosedError
 
 from db import Db
 
-class ApiHandler(tornado.web.RequestHandler):
+class ApiHandler(web.RequestHandler):
     def get(self):
         self.write("Chat API v.1.0")
 
 
-class AuthHandler(tornado.web.RequestHandler):
+class AuthHandler(web.RequestHandler):
     def __init__(self, application, request):
         super().__init__(application, request)
         self.set_header('Content-Type', 'application/json')
@@ -41,7 +41,7 @@ class AuthHandler(tornado.web.RequestHandler):
         self.write(json_encode('ok'))
 
 
-class FriendsHandler(tornado.web.RequestHandler):
+class FriendsHandler(web.RequestHandler):
     def __init__(self, application, request):
         super().__init__(application, request)
         self.set_header('Content-Type', 'application/json')
@@ -64,7 +64,7 @@ class FriendsHandler(tornado.web.RequestHandler):
         }))
 
 
-class ConversationHandler(tornado.web.RequestHandler):
+class ConversationHandler(web.RequestHandler):
     """
     Users post messages and get messages from this handler.
     Each GET and POST should receive the following params:
@@ -76,8 +76,6 @@ class ConversationHandler(tornado.web.RequestHandler):
     POST should indicate
     - message text
     """
-    waiters = set()
-
     def __init__(self, application, request):
         super().__init__(application, request)
 
@@ -95,31 +93,16 @@ class ConversationHandler(tornado.web.RequestHandler):
         print('[ConversationHandler.get] Start at {}'.format(time()))
 
         conversation_id = self.get_query_argument('inbox', None)
-        marker = self.get_query_argument('marker', None)
 
-        if marker:
-            print('[ConversationHandler] Getting messages for conversation {} from marker #{}'.format(conversation_id, marker))
-            future = Future()
-            ConversationHandler.waiters.add((future, int(marker)))
+        print('[ConversationHandler] Getting messages for conversation {}'.format(conversation_id))
+        messages = self.application.db.find_messages(conversation_id)
 
-            future.add_done_callback(self.callback_get_messages)
-            yield future
-        else:
-            print('[ConversationHandler] Getting messages for conversation {}'.format(conversation_id))
-            messages = yield self.application.db.find_messages(conversation_id)
-
-            self.write(json_encode({
-                'ok': True,
-                'messages': [item.to_dict() for item in messages]
-            }))
-            print('[ConversationHandler.get] End at {}'.format(time()))
-
-    def callback_get_messages(self, future_result):
         self.write(json_encode({
             'ok': True,
-            'messages': [item.to_dict() for item in future_result.result()]
+            'messages': [item.to_dict() for item in messages]
         }))
         print('[ConversationHandler.get] End at {}'.format(time()))
+
 
     @gen.coroutine
     def post(self):
@@ -129,24 +112,80 @@ class ConversationHandler(tornado.web.RequestHandler):
 
         print('[ConversationHandler] Posting a message to conversation #{}'.format(inbox))
 
-        self.application.db.create_message(current_user_id, inbox, text)
+        message = self.application.db.create_message(current_user_id, inbox, text)
 
         self.set_header('Content-Type', 'application/json')
         self.write(json_encode('ok'))
 
-        for (future, marker) in ConversationHandler.waiters:
-            messages = yield self.application.db.find_messages(inbox, marker)
-            future.set_result(messages)
-
-        ConversationHandler.waiters.clear()
+        self.application.notify_inbox(inbox)
+        yield self.flush()
 
 
-class Application(tornado.web.Application):
+class MessageStreamHander(web.RequestHandler):
+    """
+    Distribute and push messages to the correct inbox
+    """
+    def __init__(self, application, request):
+        super().__init__(application, request)
+        self.set_header('Content-Type', 'text/event-stream')
+
+    @gen.coroutine
+    def get(self, inbox):
+        if inbox is None:
+            self.write_error(400, reason='Inbox missing')
+            return
+
+        marker = self.get_query_argument('marker', None)
+        if marker:
+            marker = int(marker)/1000
+        while True:
+            try:
+                messages = self.application.db.find_messages(inbox, marker)
+                print('[MessageStreamHander] Found {} messages'.format(len(messages)))
+
+                if len(messages) != 0:
+                    marker = int(calendar.timegm(messages[len(messages)-1].created_at.utctimetuple()))
+
+                serialized = json_encode([item.to_dict() for item in messages])
+                print('[MessageStreamHander] Serialized data {}'.format(serialized))
+                self.write("data: {}\n\n".format(serialized))
+
+                yield self.flush()
+            except StreamClosedError:
+                print('[MessageStreamHander] Connection closed')
+                self.finish()
+            yield self.application.wait_for_inbox(inbox)
+
+
+class Application(web.Application):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.db = kwargs.get('db', None)
+        self.active_inboxes = dict()
+
+    @gen.coroutine
+    def wait_for_inbox(self, inbox):
+        if not inbox in self.active_inboxes:
+            self.active_inboxes[inbox] = []
+
+        future = Future()
+        self.active_inboxes[inbox].append(future)
+
+        print('[Application.wait_for_inbox] Waiting for inbox {}'.format(inbox))
+        yield future
+
+    def notify_inbox(self, inbox):
+        if not inbox in self.active_inboxes:
+            print('[Application.notify_inbox] Inbox {} is not in active boxes. No op.'.format(inbox))
+            return
+
+        for future in self.active_inboxes[inbox]:
+            future.set_result(True)
+
+        self.active_inboxes[inbox].clear()
+
 
 def make_app():
     base_dir = path.join(path.dirname(path.realpath(__file__)), "..")
@@ -164,7 +203,8 @@ def make_app():
             (r"/api/auth", AuthHandler),
             (r"/api/friends", FriendsHandler),
             (r"/api/chats", ConversationHandler),
-            (r"/(.*)", tornado.web.StaticFileHandler, {"path": static_dir, "default_filename": "index.html"}),
+            (r"/stream/(.+)", MessageStreamHander),
+            (r"/(.*)", web.StaticFileHandler, {"path": static_dir, "default_filename": "index.html"}),
         ],
         debug=True,
         db=db,

@@ -79,7 +79,6 @@ class Db(object):
 
         return True
 
-    @gen.coroutine
     def find_messages(self, inbox, marker=None):
         print('[find_messages] Start at {}'.format(time()))
 
@@ -88,8 +87,8 @@ class Db(object):
         if marker is None:
             messages = session.query(Message).all()
         else:
-            last_time = datetime.datetime.utcfromtimestamp(marker/1000)
-            messages = session.query(Message).filter(Message.created_at > last_time).all()
+            last_time = datetime.datetime.utcfromtimestamp(marker)
+            messages = session.query(Message).filter(Message.created_at > last_time)
 
         print('[find_messages] End at {}'.format(time()))
         return [message for message in messages]
