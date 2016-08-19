@@ -1,6 +1,7 @@
 from os import path
 from time import time
 import calendar
+import re
 
 from tornado.concurrent import Future
 from tornado.escape import json_decode, json_encode
@@ -9,17 +10,26 @@ import tornado.ioloop
 from tornado import gen, web
 from tornado.iostream import StreamClosedError
 
-from db import Db
+from db import Db, User
 
 class ApiHandler(web.RequestHandler):
+    def __init__(self, application, request):
+        super().__init__(application, request)
+        self.set_header('Content-Type', 'application/json')
+
+    def get_current_user(self):
+        user_id  = self.get_secure_cookie('user')
+        if user_id:
+            return user_id.decode('utf-8');
+        else:
+            return None
+
     def get(self):
         self.write("Chat API v.1.0")
 
 
-class AuthHandler(web.RequestHandler):
-    def __init__(self, application, request):
-        super().__init__(application, request)
-        self.set_header('Content-Type', 'application/json')
+class AuthHandler(ApiHandler):
+
 
     def post(self):
         print("[AuthHandler] Request body {}".format(self.request.body))
@@ -39,6 +49,56 @@ class AuthHandler(web.RequestHandler):
 
         self.set_secure_cookie("user", user_id)
         self.write(json_encode('ok'))
+
+
+class ChannelHandler(ApiHandler):
+
+    def __init__(self, application, request):
+        super().__init__(application, request)
+        self.set_header('Content-Type', 'text/event-stream')
+
+    @gen.coroutine
+    def get(self):
+        user = self.current_user
+        if not user:
+            return self.send_error(status_code=403, reason='Not authorized')
+
+        self.application.db.update_user(user, status=User.STATUS_ONLINE)
+
+        while True:
+            yield self.application.wait(user)
+            result = self.application.get_wait_result(user)
+
+            type = result[0]
+            data = result[1]
+            if type == 'inbox':
+                inbox = data['inbox']
+                marker = data['marker']
+                self.send_messages(inbox, marker)
+            elif type == 'notification':
+                self.send_notification()
+
+            yield self.flush()
+
+
+
+    def send_messages(self, inbox, marker):
+        print("Sending 'inbox' event to user")
+        data = json_encode({
+            'inbox': inbox,
+            'marker': marker
+        })
+        self.write('event: inbox\ndata: {}\n\n'.format(data))
+
+    def send_notification(self):
+        pass
+
+    def on_connection_close(self):
+        user = self.current_user
+        self.application.db.update_user(user, status=User.STATUS_OFFLINE)
+        self.application.cancel_wait(user)
+
+        super().on_connection_close()
 
 
 class FriendsHandler(web.RequestHandler):
@@ -93,9 +153,10 @@ class ConversationHandler(web.RequestHandler):
         print('[ConversationHandler.get] Start at {}'.format(time()))
 
         conversation_id = self.get_query_argument('inbox', None)
+        marker = self.get_query_argument('marker', None)
 
         print('[ConversationHandler] Getting messages for conversation {}'.format(conversation_id))
-        messages = self.application.db.find_messages(conversation_id)
+        messages = self.application.db.find_messages(conversation_id, int(marker) if marker else None)
 
         self.write(json_encode({
             'ok': True,
@@ -117,7 +178,15 @@ class ConversationHandler(web.RequestHandler):
         self.set_header('Content-Type', 'application/json')
         self.write(json_encode('ok'))
 
-        self.application.notify_inbox(inbox)
+        # A simplistic logic to find out who to notify
+        rgx = re.compile('d_(\w+)_(\w+)', re.IGNORECASE)
+        match = rgx.match(inbox)
+        users = match.groups()
+        marker = int(message.created_at.timestamp())
+
+        for user in users:
+            self.application.notify_waiter(user, 'inbox', {'inbox': inbox, 'marker': marker})
+
         yield self.flush()
 
 
@@ -164,6 +233,37 @@ class Application(web.Application):
 
         self.db = kwargs.get('db', None)
         self.active_inboxes = dict()
+        self.waiters = dict()
+        self.waiter_results = dict()
+
+    @gen.coroutine
+    def wait(self, user):
+        if user in self.waiters:
+            yield self.waiters[user]
+        future = Future()
+        self.waiters[user] = future
+
+        yield future
+
+    def get_wait_result(self, user):
+        if not user in self.waiter_results:
+            return None
+
+        return self.waiter_results[user]
+
+    def cancel_wait(self, user):
+        if user in self.waiters:
+            del self.waiters[user]
+
+    def notify_waiter(self, user, type, kwargs):
+        if not user in self.waiters:
+            return
+
+        result = (type, kwargs)
+        self.waiter_results[user] = result
+        self.waiters[user].set_result(result)
+
+        del self.waiters[user]
 
     @gen.coroutine
     def wait_for_inbox(self, inbox):
@@ -203,7 +303,7 @@ def make_app():
             (r"/api/auth", AuthHandler),
             (r"/api/friends", FriendsHandler),
             (r"/api/chats", ConversationHandler),
-            (r"/stream/(.+)", MessageStreamHander),
+            (r"/stream", ChannelHandler),
             (r"/(.*)", web.StaticFileHandler, {"path": static_dir, "default_filename": "index.html"}),
         ],
         debug=True,

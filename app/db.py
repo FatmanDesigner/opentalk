@@ -17,8 +17,12 @@ Base = sqlalchemy.ext.declarative.declarative_base()
 class User(Base):
     __tablename__ = 'users'
 
+    STATUS_OFFLINE = 1
+    STATUS_ONLINE = 2
+
     user_id = Column(String(20), primary_key=True)
     username = Column(String(40))
+    status = Column(Integer, default=STATUS_OFFLINE)
 
 
 class Message(Base):
@@ -28,7 +32,7 @@ class Message(Base):
     message_id = Column(Integer, autoincrement=True, primary_key=True)
     from_user = Column(String(20), nullable=False)
     inbox = Column(String(20), nullable=False)
-    created_at = Column(TIMESTAMP, nullable=False, default=datetime.datetime.utcnow)
+    created_at = Column(TIMESTAMP, nullable=False, default=lambda: (datetime.datetime.now().replace(microsecond=0)))
     text = Column(String(255), nullable=False)
 
     def to_dict(self):
@@ -38,6 +42,18 @@ class Message(Base):
                     created_at=str(self.created_at),
                     text=self.text)
 
+
+class UndeliveredMessage(Base):
+    __tablename__ = 'undelivered_messages'
+    __table_args__ = {'sqlite_autoincrement': True}
+
+    undelivered_id = Column(Integer, autoincrement=True, primary_key=True)
+    message_id = Column(Integer, ForeignKey('messages.message_id'))
+    # to_user is not the same as inbox
+    to_user = Column(String(20), nullable=False)
+    created_at = Column(TIMESTAMP, nullable=False, default=lambda: (datetime.datetime.now().replace(microsecond=0)))
+
+    message = relationship('Message')
 
 
 class Db(object):
@@ -80,17 +96,14 @@ class Db(object):
         return True
 
     def find_messages(self, inbox, marker=None):
-        print('[find_messages] Start at {}'.format(time()))
-
         session = self.sessionmaker()
 
         if marker is None:
             messages = session.query(Message).all()
         else:
-            last_time = datetime.datetime.utcfromtimestamp(marker)
-            messages = session.query(Message).filter(Message.created_at > last_time)
+            last_time = datetime.datetime.fromtimestamp(marker)
+            messages = session.query(Message).filter(Message.created_at >= last_time) # Pull strategy, hence the equal or greater than
 
-        print('[find_messages] End at {}'.format(time()))
         return [message for message in messages]
 
     def create_message(self, from_user, inbox, message):
@@ -103,4 +116,15 @@ class Db(object):
 
         session.refresh(message)
 
-        return message.message_id
+        return message
+
+    def update_user(self, user_id, **kwargs):
+        session = self.sessionmaker()
+        user = session.query(User).get(user_id)
+
+        if 'status' in kwargs:
+            user.status = kwargs['status']
+
+        session.add(user)
+        session.commit()
+        return True

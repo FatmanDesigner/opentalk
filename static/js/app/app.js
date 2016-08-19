@@ -6,6 +6,7 @@ const app = angular.module('app', ['ng', 'ui.router', 'ngStorage']);
 
 function ChatroomCtrl ($rootScope, $scope, $sessionStorage, $http) {
   getFriendList();
+  connect();
 
   $scope.currentConversationID = null;
   $scope.messages = [];
@@ -20,7 +21,7 @@ function ChatroomCtrl ($rootScope, $scope, $sessionStorage, $http) {
     if ($scope.disposeSource) {
       $scope.disposeSource();
     }
-    showConversation(currentConversationID);
+    fetchConversation(currentConversationID);
   };
 
   $scope.sendChatMessage = (message) => {
@@ -55,10 +56,11 @@ function ChatroomCtrl ($rootScope, $scope, $sessionStorage, $http) {
     });
   }
 
-  function showConversation (conversationID) {
+  function fetchConversation (conversationID, marker) {
     var promise = $http.get(`/api/chats`, {
       params: {
-        inbox: conversationID
+        inbox: conversationID,
+        marker: marker || undefined
       }
     });
 
@@ -66,43 +68,42 @@ function ChatroomCtrl ($rootScope, $scope, $sessionStorage, $http) {
       let { messages } = response.data;
 
       console.info(`[ChatroomCtrl.showConversation] Showing conversation with ${messages.length} messages...`);
-      $scope.messages = messages;
-    });
-
-    promise.then(function () {
-      $scope.disposeSource = getConversationStream(conversationID);
+      $scope.messages = $scope.messages.concat(messages);
     });
   }
 
-  function getConversationStream (conversationID, marker) {
-    console.log(`[getConversationStream] Waiting for more messages...`);
-    var source = new EventSource(`/stream/${conversationID}?marker=${marker || Date.now()}`);
+  function connect () {
+    var source = new EventSource('/stream');
+    source.addEventListener('inbox', onmessage);
+    source.addEventListener('notification', onmessage);
 
-    var handler = (response) => {
-      console.debug(response.data);
-      let data;
-      let messages;
-
+    function onmessage (message) {
+      var data;
+      var type;
       try {
-        messages = JSON.parse(response.data);
-
-        console.log(`[getConversationStream] Retrieved ${messages.length} messages.`);
-        $scope.messages = $scope.messages.concat(messages);
-
-        $scope.$apply();
+        data = JSON.parse(message.data);
+        type = message.type;
       }
       catch (e) {
         console.error(e);
+        return;
       }
-    };
 
-    source.onmessage = handler;
-
-    return function () {
-      console.log(`[disposeSource] Disposing message source...`);
-
-      source.close();
+      switch (type) {
+        case 'inbox':
+          console.log(`[onmessage] Inbox...`, data);
+          let {inbox, marker} = data;
+          fetchConversation(inbox, marker);
+          break;
+        case 'notification':
+          console.log(`[onmessage] Notification...`, data);
+          break;
+      }
     }
+
+    return function dispose() {
+      source.close();
+    };
   }
   /**
    * Create a conversation ID (aka, inbox) for 2 or more users.
