@@ -82,7 +82,10 @@ class Db(object):
 
     def find_users(self, friends_of_user=None):
         session = self.sessionmaker()
-        users = session.query(User).all()
+        if friends_of_user:
+            users = session.query(User).filter(User.user_id != friends_of_user)
+        else:
+            users = session.query(User).all()
 
         return [user for user in users]
 

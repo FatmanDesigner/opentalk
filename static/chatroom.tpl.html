@@ -7,6 +7,8 @@
            class="list-group-item">
         <span ng-click="startChattingWithFriend(friend)"
               ng-bind="friend.username"></span>
+        <span ng-if="friend.hasUnread"
+              class="badge badge-info"><i class="fa fa-exclamation-circle"></i></span>
       </div>
     </div>
   </div>

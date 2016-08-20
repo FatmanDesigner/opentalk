@@ -4,23 +4,72 @@ import 'ng-storage';
 
 const app = angular.module('app', ['ng', 'ui.router', 'ngStorage']);
 
-function ChatroomCtrl ($rootScope, $scope, $sessionStorage, $http) {
-  getFriendList();
-  connect();
+function ConversationService ($http) {
 
+  return {
+    /**
+     * Create a conversation ID (aka, inbox) for 2 or more users.
+     * A direct conversation's ID starts with "d", a group chat ID starts with "g"
+     */
+    createConversationID (...userIDs) {
+      if (!userIDs.length || userIDs.length < 2) {
+        throw new Error('Invalid arguments');
+      }
+
+      userIDs.sort();
+      if (userIDs.length === 2) {
+        return 'd_' + userIDs.join('_');
+      }
+      else if (userIDs.length > 2) {
+        return 'g_' + userIDs.join('_');
+      }
+    },
+    fetchConversation (conversationID, marker) {
+      var promise = $http.get(`/api/chats`, {
+        params: {
+          inbox: conversationID,
+          marker: marker || undefined
+        }
+      });
+
+      return promise.then((response) => {
+        let { messages } = response.data;
+
+        console.info(`[ConversationService.fetchConversation] Showing conversation with ${messages.length} messages...`);
+        return messages;
+      });
+    },
+
+    getChatters (inbox) {
+      let rgx = /^d_(\w+)_(\w+)$/gi;
+      let match = rgx.exec(inbox);
+      if (!match) {
+        throw new Error(`Invalid inbox name ${inbox}`);
+      }
+
+      let users = match.slice(1, 3);
+      return users;
+    }
+  }
+}
+ConversationService.$inject = ['$http'];
+app.service('conversationService', ConversationService);
+
+function ChatroomCtrl ($rootScope, $scope, $sessionStorage, $http, conversationService) {
+  getFriendList();
+
+  $scope.friends = [];
   $scope.currentConversationID = null;
   $scope.messages = [];
-  $scope.disposeSource = null;
+  $scope.disposeSource = connect();
 
   $scope.startChattingWithFriend = (friend) => {
-    let currentConversationID = createConversationID($sessionStorage.currentUser.id, friend.id);
+    let currentConversationID = conversationService.createConversationID($sessionStorage.currentUser.id, friend.id);
     console.info(`[ChatroomCtrl] Starting a chat with ${friend.id}`);
     $scope.messages = [];
     $scope.currentConversationID = currentConversationID;
 
-    if ($scope.disposeSource) {
-      $scope.disposeSource();
-    }
+    friend.hasUnread = false;
     fetchConversation(currentConversationID);
   };
 
@@ -57,16 +106,8 @@ function ChatroomCtrl ($rootScope, $scope, $sessionStorage, $http) {
   }
 
   function fetchConversation (conversationID, marker) {
-    var promise = $http.get(`/api/chats`, {
-      params: {
-        inbox: conversationID,
-        marker: marker || undefined
-      }
-    });
-
-    promise.then((response) => {
-      let { messages } = response.data;
-
+    var promise = conversationService.fetchConversation(conversationID, marker);
+    promise.then((messages) => {
       console.info(`[ChatroomCtrl.showConversation] Showing conversation with ${messages.length} messages...`);
       $scope.messages = $scope.messages.concat(messages);
     });
@@ -78,53 +119,50 @@ function ChatroomCtrl ($rootScope, $scope, $sessionStorage, $http) {
     source.addEventListener('notification', onmessage);
 
     function onmessage (message) {
-      var data;
-      var type;
-      try {
-        data = JSON.parse(message.data);
-        type = message.type;
-      }
-      catch (e) {
-        console.error(e);
-        return;
-      }
+      $scope.$apply(function () {
+        var data;
+        var type;
+        try {
+          data = JSON.parse(message.data);
+          type = message.type;
+        }
+        catch (e) {
+          console.error(e);
+          return;
+        }
 
-      switch (type) {
-        case 'inbox':
-          console.log(`[onmessage] Inbox...`, data);
-          let {inbox, marker} = data;
-          fetchConversation(inbox, marker);
-          break;
-        case 'notification':
-          console.log(`[onmessage] Notification...`, data);
-          break;
-      }
+        switch (type) {
+          case 'inbox':
+            console.log(`[onmessage] Inbox...`, data);
+            let {inbox, marker} = data;
+            if (inbox !== $scope.currentConversationID) {
+              console.info(`[onmessage] Someone has sent you a message...`);
+              let chatters = conversationService.getChatters(inbox);
+
+              let { id:userID } = $sessionStorage.currentUser;
+              let myIndex = chatters.indexOf(userID);
+              chatters.splice(myIndex, 1);
+
+              let friend = $scope.friends.find(item => item.id === chatters[0]);
+              friend.hasUnread = true;
+              break;
+            }
+
+            fetchConversation(inbox, marker);
+            break;
+          case 'notification':
+            console.log(`[onmessage] Notification...`, data);
+            break;
+        }
+      });
     }
 
     return function dispose() {
       source.close();
     };
   }
-  /**
-   * Create a conversation ID (aka, inbox) for 2 or more users.
-   * A direct conversation's ID starts with "d", a group chat ID starts with "g"
-   */
-  function createConversationID () {
-    let userIDs = Array.prototype.slice.call(arguments, 0);
-    if (!userIDs.length || userIDs.length < 2) {
-      throw new Error('Invalid arguments');
-    }
-
-    userIDs.sort();
-    if (userIDs.length === 2) {
-      return 'd_' + userIDs.join('_');
-    }
-    else if (userIDs.length > 2) {
-      return 'g_' + userIDs.join('_');
-    }
-  }
 }
-ChatroomCtrl.$inject = ['$rootScope', '$scope', '$sessionStorage', '$http'];
+ChatroomCtrl.$inject = ['$rootScope', '$scope', '$sessionStorage', '$http', 'conversationService'];
 
 function LoginCtrl ($rootScope, $scope, $sessionStorage, $http, $state) {
   $scope.login = () => {
