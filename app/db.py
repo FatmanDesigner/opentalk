@@ -102,10 +102,12 @@ class Db(object):
         session = self.sessionmaker()
 
         if marker is None:
-            messages = session.query(Message).all()
+            messages = session.query(Message).filter(Message.inbox == inbox)
         else:
             last_time = datetime.datetime.fromtimestamp(marker)
-            messages = session.query(Message).filter(Message.created_at >= last_time) # Pull strategy, hence the equal or greater than
+            messages = (session.query(Message)
+                        .filter((Message.inbox == inbox) & (Message.created_at >= last_time))
+                        ) # Pull strategy, hence the equal or greater than
 
         return [message for message in messages]
 

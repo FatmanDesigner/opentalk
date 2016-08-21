@@ -4,7 +4,7 @@ import 'ng-storage';
 
 const app = angular.module('app', ['ng', 'ui.router', 'ngStorage']);
 
-function ConversationService ($http) {
+function ConversationService ($sessionStorage, $http) {
 
   return {
     /**
@@ -34,6 +34,8 @@ function ConversationService ($http) {
 
       return promise.then((response) => {
         let { messages } = response.data;
+        let currentUserID = $sessionStorage.currentUser.id;
+        messages.forEach(item => item.isMyMessage = (currentUserID === item.from_user));
 
         console.info(`[ConversationService.fetchConversation] Showing conversation with ${messages.length} messages...`);
         return messages;
@@ -52,7 +54,7 @@ function ConversationService ($http) {
     }
   }
 }
-ConversationService.$inject = ['$http'];
+ConversationService.$inject = ['$sessionStorage', '$http'];
 app.service('conversationService', ConversationService);
 
 function ChatroomCtrl ($rootScope, $scope, $sessionStorage, $http, conversationService) {
@@ -187,6 +189,50 @@ function LoginCtrl ($rootScope, $scope, $sessionStorage, $http, $state) {
   };
 }
 LoginCtrl.$inject = ['$rootScope', '$scope', '$sessionStorage', '$http', '$state'];
+
+function HeaderDirective ($sessionStorage) {
+  return {
+    restrict: 'A',
+    link (scope) {
+      scope.currentUser = $sessionStorage.currentUser;
+    },
+    template: `
+    <nav class="navbar navbar-default navbar-fixtop">
+      <div class="container-fluid">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="#">OpenTalk</a>
+        </div>
+        <div id="navbar" class="navbar-collapse collapse">
+
+          <ul class="nav navbar-nav">
+            <li class="active"><a href="#">Chat Room</a></li>
+            <li>
+              <a href="https://github.com/khanhhua/opentalk">
+                <i class="fa fa-github"></i> Fork me!
+              </a>
+            </li>
+          </ul>
+          <ul class="nav navbar-nav navbar-right">
+            <li>
+              <a><i class="fa fa-user"></i> {{currentUser.id}}</a>
+            </li>
+            <li>
+              <button class="btn navbar-btn btn-small btn-danger"><i class="fa fa-power-off"></i> Log out</button>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>`
+  }
+}
+HeaderDirective.$inject = ['$sessionStorage'];
+app.directive('uiHeader', HeaderDirective);
 
 app.config(['$locationProvider', '$stateProvider', function ($locationProvider, $stateProvider) {
   $locationProvider.html5Mode(false);

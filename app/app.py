@@ -95,6 +95,8 @@ class ChannelHandler(ApiHandler):
 
     def on_connection_close(self):
         user = self.current_user
+        print("User {} has disconnected...".format(user))
+
         self.application.db.update_user(user, status=User.STATUS_OFFLINE)
         self.application.cancel_wait(user)
 
@@ -150,20 +152,16 @@ class ConversationHandler(web.RequestHandler):
 
     @gen.coroutine
     def get(self):
-        print('[ConversationHandler.get] Start at {}'.format(time()))
-
         conversation_id = self.get_query_argument('inbox', None)
         marker = self.get_query_argument('marker', None)
 
-        print('[ConversationHandler] Getting messages for conversation {}'.format(conversation_id))
+        print('[ConversationHandler] Getting messages for conversation {} at marker {}'.format(conversation_id, marker))
         messages = self.application.db.find_messages(conversation_id, int(marker) if marker else None)
 
         self.write(json_encode({
             'ok': True,
             'messages': [item.to_dict() for item in messages]
         }))
-        print('[ConversationHandler.get] End at {}'.format(time()))
-
 
     @gen.coroutine
     def post(self):
@@ -188,42 +186,6 @@ class ConversationHandler(web.RequestHandler):
             self.application.notify_waiter(user, 'inbox', {'inbox': inbox, 'marker': marker})
 
         yield self.flush()
-
-
-class MessageStreamHander(web.RequestHandler):
-    """
-    Distribute and push messages to the correct inbox
-    """
-    def __init__(self, application, request):
-        super().__init__(application, request)
-        self.set_header('Content-Type', 'text/event-stream')
-
-    @gen.coroutine
-    def get(self, inbox):
-        if inbox is None:
-            self.write_error(400, reason='Inbox missing')
-            return
-
-        marker = self.get_query_argument('marker', None)
-        if marker:
-            marker = int(marker)/1000
-        while True:
-            try:
-                messages = self.application.db.find_messages(inbox, marker)
-                print('[MessageStreamHander] Found {} messages'.format(len(messages)))
-
-                if len(messages) != 0:
-                    marker = int(calendar.timegm(messages[len(messages)-1].created_at.utctimetuple()))
-
-                serialized = json_encode([item.to_dict() for item in messages])
-                print('[MessageStreamHander] Serialized data {}'.format(serialized))
-                self.write("data: {}\n\n".format(serialized))
-
-                yield self.flush()
-            except StreamClosedError:
-                print('[MessageStreamHander] Connection closed')
-                self.finish()
-            yield self.application.wait_for_inbox(inbox)
 
 
 class Application(web.Application):

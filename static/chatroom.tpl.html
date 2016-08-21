@@ -1,36 +1,53 @@
-<div class="ui-chatroom row">
-  <h2 class="col-md-12">Chat room</h2>
-
-  <div class="col-md-4">
-    <div class="list-group">
-      <div ng-repeat="friend in friends"
-           class="list-group-item">
-        <span ng-click="startChattingWithFriend(friend)"
-              ng-bind="friend.username"></span>
-        <span ng-if="friend.hasUnread"
-              class="badge badge-info"><i class="fa fa-exclamation-circle"></i></span>
-      </div>
-    </div>
-  </div>
-
-  <div class="col-md-8">
-    <div class="panel panel-chat">
-      <div class="message">
-        <div class="message-toolbox">
-          <button ng-click="sendChatMessage(message)"
-              class="btn btn-success btn-block">Send</button>
-        </div>
-        <div class="message-text">
-          <textarea ng-model="message" name="name" rows="3"></textarea>
-        </div>
-      </div>
-      <div class="conversation">
-        <div class="conversation-item clearfix" ng-repeat="item in messages">
-          <div class="message-from-user pull-left">
-            <img ng-src="{{'https://placeholdit.imgix.net/~text?txtsize=16&txt=' + item.from_user +'&w=64&h=64'}}"
+<header ui-header></header>
+<div class="container">
+  <div class="ui-chatroom row">
+    <div class="col-md-4">
+      <div class="list-group friend-list">
+        <header>EVERYONE</header>
+        <div ng-repeat="friend in friends"
+             class="list-group-item">
+          <div class="friend-list-avatar">
+            <img ng-src="{{'http://dummyimage.com/100x100/000/fff&text=' + friend.id.substring(0,1)}}"
                  alt="{{item.from_user}}">
           </div>
-          <div class="message-text" ng-bind="item.text"></div>
+          <span ng-click="startChattingWithFriend(friend)"
+                ng-bind="friend.username"></span>
+          <span ng-if="friend.hasUnread"
+                class="badge badge-info"><i class="fa fa-exclamation-circle"></i></span>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-8" ng-if="!currentConversationID">
+      <div class="alert alert-info">
+        Select a friend to start chatting...
+      </div>
+    </div>
+    <div class="col-md-8" ng-if="currentConversationID">
+      <div class="panel panel-chat">
+        <div class="message">
+          <div class="message-toolbox">
+            <button ng-click="sendChatMessage(message)"
+                class="btn btn-success btn-block">Send</button>
+          </div>
+          <div class="message-text">
+            <textarea ng-model="message" name="name" rows="3"></textarea>
+          </div>
+        </div>
+        <div class="conversation">
+          <div class="conversation-item clearfix"
+               ng-class="{'text-left': item.isMyMessage, 'text-right': !item.isMyMessage}"
+               ng-repeat="item in messages">
+
+            <div class="message-from-user" ng-class="::{'pull-left': item.isMyMessage, 'pull-right': !item.isMyMessage}">
+              <img ng-src="{{'http://dummyimage.com/100x100/000/fff&text=' + item.from_user.substring(0,1)}}"
+                   alt="{{item.from_user}}">
+            </div>
+
+            <div class="message-text">
+              <div class="message-created-at" ng-bind="::item.created_at"></div>
+              <div ng-bind="::item.text"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

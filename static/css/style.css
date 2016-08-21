@@ -6,6 +6,40 @@
   padding-top: 3em;
 }
 
+.friend-list {
+
+}
+
+.friend-list-avatar {
+  float: left;
+  height: 2em;
+  margin-left: -10px;
+  overflow: hidden;
+  margin-top: -4px;
+  margin-right: 6px;
+}
+
+.friend-list-avatar:after {
+  font-family: FontAwesome;
+  content: "\f110";
+
+  display: block;
+  width: 2em;
+  height: 2em;
+  line-height: 2em;
+
+  text-align: center;
+  
+  -webkit-animation: fa-spin 2s infinite linear;
+  -o-animation: fa-spin 2s infinite linear;
+  animation: fa-spin 2s infinite linear;
+}
+
+.friend-list-avatar img {
+  width: auto;
+  height: 100%;
+}
+
 .message {
 
 }
@@ -40,10 +74,25 @@
   display: block;
   width: 64px;
   height: 64px;
+
+  -webkit-border-radius: 5px;
+  -moz-border-radius: 5px;
+  border-radius: 5px;
+
+  overflow: hidden;
 }
 
 .message-from-user.pull-left {
   margin-right: 1em;
+}
+
+.message-from-user.pull-right {
+  margin-left: 1em;
+}
+
+.message-from-user img {
+  max-width: 100%;
+  height: auto;
 }
 
 .message-text {
