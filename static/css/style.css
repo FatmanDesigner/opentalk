@@ -1,5 +1,12 @@
+html, body {
+  font-family: 'Ubuntu', sans-serif;
+}
+
 .loader {
-  width: 200px;
+  width: auto;
+  text-align: center;
+
+  font-size: 3em;
 }
 
 .ui-login {
@@ -106,6 +113,9 @@
 /* =======================
  * BOOTSTRAP REDEFINED
  * =======================*/
+.navbar-brand {
+  font-weight: 700;
+}
 .navbar-center {
   float: none;
   width: 50%;

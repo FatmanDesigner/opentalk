@@ -1,7 +1,7 @@
 <header ui-header></header>
 <div class="container">
   <div class="ui-chatroom row">
-    <div class="col-md-4">
+    <div class="col-md-3">
       <div class="list-group friend-list">
         <header>EVERYONE</header>
         <div ng-repeat="friend in friends"
@@ -17,7 +17,7 @@
         </div>
       </div>
     </div>
-    <div class="col-md-8" ng-if="!currentConversationID">
+    <div class="col-md-9" ng-if="!currentConversationID">
       <div class="alert alert-info">
         Select a friend to start chatting...
       </div>

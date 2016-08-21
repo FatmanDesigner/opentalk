@@ -314,8 +314,8 @@ function HeaderDirective ($http, $sessionStorage, sse) {
           </ul>
           <div class="navbar-text navbar-center">
             <i class="fa fa-circle green"></i>
-            <span ng-bind="onlineUsers"></span>
-            <span>users are currently online</span>
+            <span ng-if="onlineUsers > 1">{{onlineUsers}} users are currently online.</span>
+            <span ng-if="onlineUsers === 1">You are the only user online.</span>
           </div>
         </div>
       </div>
