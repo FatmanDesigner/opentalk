@@ -8,7 +8,6 @@ from tornado.escape import json_decode, json_encode
 
 import tornado.ioloop
 from tornado import gen, web
-from tornado.iostream import StreamClosedError
 
 from db import Db, User
 
@@ -64,6 +63,10 @@ class ChannelHandler(ApiHandler):
             return self.send_error(status_code=403, reason='Not authorized')
 
         self.application.db.update_user(user, status=User.STATUS_ONLINE)
+        self.update_user_presence_stats()
+
+        self.write('event: ack\ndata: {}\n\n'.format(int(time())))
+        yield self.flush()
 
         while True:
             yield self.application.wait(user)
@@ -76,11 +79,12 @@ class ChannelHandler(ApiHandler):
                 marker = data['marker']
                 self.send_messages(inbox, marker)
             elif type == 'notification':
-                self.send_notification()
+                self.send_notification(data)
 
-            yield self.flush()
-
-
+            try:
+                yield self.flush()
+            except tornado.iostream.StreamClosedError as e:
+                break
 
     def send_messages(self, inbox, marker):
         print("Sending 'inbox' event to user")
@@ -90,40 +94,54 @@ class ChannelHandler(ApiHandler):
         })
         self.write('event: inbox\ndata: {}\n\n'.format(data))
 
-    def send_notification(self):
-        pass
+    def send_notification(self, data):
+        print("Sending 'notification' event to user")
+        serialized = json_encode(data)
+        self.write('event: notification\ndata: {}\n\n'.format(serialized))
 
     def on_connection_close(self):
         user = self.current_user
         print("User {} has disconnected...".format(user))
 
-        self.application.db.update_user(user, status=User.STATUS_OFFLINE)
         self.application.cancel_wait(user)
+        self.application.db.update_user(user, status=User.STATUS_OFFLINE)
+        self.update_user_presence_stats()
 
+        print('[on_connection_close] Done notifying all users')
         super().on_connection_close()
 
+    def update_user_presence_stats(self):
+        users = self.application.db.find_users()
+        online_users = self.application.db.count_online_users()
+        print('[ChannelHandler:update_user_presence_stats] Total online users: {}'.format(online_users))
 
-class FriendsHandler(web.RequestHandler):
-    def __init__(self, application, request):
-        super().__init__(application, request)
-        self.set_header('Content-Type', 'application/json')
+        for item in users:
+            self.application.notify_waiter(item.user_id, 'notification', online_users=online_users)
 
-    def get_current_user(self):
-        user_id  = self.get_secure_cookie('user')
-        if user_id:
-            return user_id.decode('utf-8');
-        else:
-            return None
+
+class FriendsHandler(ApiHandler):
 
     @gen.coroutine
     def get(self):
-        current_user_id = self.get_current_user()
-        users = self.application.db.find_users(friends_of_user=current_user_id)
+        summary = self.get_query_argument('summary', default=None)
 
-        self.write(json_encode({
-            'ok': True,
-            'users': [{ 'id': user.user_id, 'username': user.username } for user in users]
-        }))
+        if summary is None:
+            current_user_id = self.get_current_user()
+            users = self.application.db.find_users(friends_of_user=current_user_id)
+
+            self.write(json_encode({
+                'ok': True,
+                'users': [{ 'id': user.user_id, 'username': user.username } for user in users]
+            }))
+            return
+        else:
+            fields = summary.split(',')
+            if 'count' in fields:
+                count = self.application.db.count_online_users()
+                self.write(json_encode({
+                    'ok': True,
+                    'count': count
+                }))
 
 
 class ConversationHandler(web.RequestHandler):
@@ -217,7 +235,7 @@ class Application(web.Application):
         if user in self.waiters:
             del self.waiters[user]
 
-    def notify_waiter(self, user, type, kwargs):
+    def notify_waiter(self, user, type, **kwargs):
         if not user in self.waiters:
             return
 
@@ -268,7 +286,7 @@ def make_app():
             (r"/stream", ChannelHandler),
             (r"/(.*)", web.StaticFileHandler, {"path": static_dir, "default_filename": "index.html"}),
         ],
-        debug=True,
+        debug=False,
         db=db,
         cookie_secret='s3cr3t')
 

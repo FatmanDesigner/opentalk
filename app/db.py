@@ -64,7 +64,7 @@ class Db(object):
     def __init__(self, connection):
         self.connection = connection
         self.engine = create_engine(self.connection)
-        self.engine.echo = True  # Try changing this to True and see what happens
+        self.engine.echo = False  # Try changing this to True and see what happens
 
         self.sessionmaker = scoped_session(sessionmaker(bind=self.engine))
         Base.metadata.bind = self.engine
@@ -88,6 +88,12 @@ class Db(object):
             users = session.query(User).all()
 
         return [user for user in users]
+
+    def count_online_users(self):
+        session = self.sessionmaker()
+        count = session.query(func.count(User.user_id)).filter(User.status == User.STATUS_ONLINE).scalar()
+
+        return count
 
     def create_user(self, user_id, username):
         user = User(user_id=user_id, username=username)

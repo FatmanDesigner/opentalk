@@ -57,13 +57,136 @@ function ConversationService ($sessionStorage, $http) {
 ConversationService.$inject = ['$sessionStorage', '$http'];
 app.service('conversationService', ConversationService);
 
-function ChatroomCtrl ($rootScope, $scope, $sessionStorage, $http, conversationService) {
+function ServerSentEventSource ($rootScope, $q) {
+  let dispose = null;
+  let isConnecting = false;
+  let isConnected = false;
+
+  const EVENT_INBOX = 'inbox';
+  const EVENT_NOTIFICATION = 'notification';
+
+  const handlers = {
+    [EVENT_INBOX]: [],
+    [EVENT_NOTIFICATION]: []
+  };
+
+  function onmessage(message) {
+    $rootScope.$apply(function () {
+      var data;
+      var type;
+      try {
+        data = JSON.parse(message.data);
+        type = message.type;
+      }
+      catch (e) {
+        console.error(e);
+        return;
+      }
+
+      switch (type) {
+        case 'inbox':
+          console.log(`[onmessage] Inbox...`, data);
+          let {inbox, marker} = data;
+
+          handlers['inbox'].forEach(handler => {
+            handler.apply(null, [inbox, marker]);
+          });
+
+          break;
+        case 'notification':
+          console.log(`[onmessage] Notification...`, data);
+          handlers['notification'].forEach(handler => {
+            handler.apply(null, [data]);
+          });
+
+          break;
+      }
+    });
+  }
+
+  let deferred;
+  return {
+    connect () {
+      if (isConnected) {
+        deferred.resolve();
+        return deferred.promise;
+      }
+      if (isConnecting) {
+        return deferred.promise;
+      }
+      deferred = $q.defer();
+      isConnecting = true;
+
+      var source = new EventSource('/stream');
+      dispose = function dispose() {
+        deferred = null;
+        source.close();
+      };
+
+      source.onerror = function () {
+        isConnecting = false;
+        isConnected = false;
+      };
+      source.addEventListener('ack', function (event) {
+        isConnecting = false;
+        isConnected = true;
+
+        deferred.resolve();
+      });
+      source.addEventListener('inbox', onmessage);
+      source.addEventListener('notification', onmessage);
+
+      return deferred.promise;
+    },
+    subscribe (eventType, handler) {
+      if (!(eventType in handlers)) {
+        throw new Error(`event type ${eventType} is invalid`);
+      }
+      if (!handler || !angular.isFunction(handler)) {
+        throw new Error('handler is not a function', handler);
+      }
+
+      handlers[eventType].push(handler);
+
+      return function unsubsribe () {
+        let index = handlers[eventType].indexOf(handler);
+        handlers.splice(index, 1);
+      };
+    },
+    disconnect () {
+      dispose && dispose();
+
+      isConnecting = false;
+      isConnected = false;
+    }
+  }
+}
+ServerSentEventSource.$inject = ['$rootScope', '$q'];
+app.service('sse', ServerSentEventSource);
+
+function ChatroomCtrl ($rootScope, $scope, $sessionStorage, $http, conversationService, sse) {
   getFriendList();
 
   $scope.friends = [];
   $scope.currentConversationID = null;
   $scope.messages = [];
-  $scope.disposeSource = connect();
+
+  sse.subscribe('inbox', function onInbox (inbox, marker) {
+    if (inbox !== $scope.currentConversationID) {
+      console.info(`[onmessage] Someone has sent you a message...`);
+      let chatters = conversationService.getChatters(inbox);
+      let { id:userID } = $sessionStorage.currentUser;
+      let myIndex = chatters.indexOf(userID);
+      chatters.splice(myIndex, 1);
+      let friend = $scope.friends.find(item => item.id === chatters[0]);
+
+      friend.hasUnread = true;
+      return;
+    }
+
+    fetchConversation(inbox, marker);
+  });
+  sse.connect();
 
   $scope.startChattingWithFriend = (friend) => {
     let currentConversationID = conversationService.createConversationID($sessionStorage.currentUser.id, friend.id);
@@ -114,57 +237,8 @@ function ChatroomCtrl ($rootScope, $scope, $sessionStorage, $http, conversationS
       $scope.messages = $scope.messages.concat(messages);
     });
   }
-
-  function connect () {
-    var source = new EventSource('/stream');
-    source.addEventListener('inbox', onmessage);
-    source.addEventListener('notification', onmessage);
-
-    function onmessage (message) {
-      $scope.$apply(function () {
-        var data;
-        var type;
-        try {
-          data = JSON.parse(message.data);
-          type = message.type;
-        }
-        catch (e) {
-          console.error(e);
-          return;
-        }
-
-        switch (type) {
-          case 'inbox':
-            console.log(`[onmessage] Inbox...`, data);
-            let {inbox, marker} = data;
-            if (inbox !== $scope.currentConversationID) {
-              console.info(`[onmessage] Someone has sent you a message...`);
-              let chatters = conversationService.getChatters(inbox);
-
-              let { id:userID } = $sessionStorage.currentUser;
-              let myIndex = chatters.indexOf(userID);
-              chatters.splice(myIndex, 1);
-
-              let friend = $scope.friends.find(item => item.id === chatters[0]);
-              friend.hasUnread = true;
-              break;
-            }
-
-            fetchConversation(inbox, marker);
-            break;
-          case 'notification':
-            console.log(`[onmessage] Notification...`, data);
-            break;
-        }
-      });
-    }
-
-    return function dispose() {
-      source.close();
-    };
-  }
 }
-ChatroomCtrl.$inject = ['$rootScope', '$scope', '$sessionStorage', '$http', 'conversationService'];
+ChatroomCtrl.$inject = ['$rootScope', '$scope', '$sessionStorage', '$http', 'conversationService', 'sse'];
 
 function LoginCtrl ($rootScope, $scope, $sessionStorage, $http, $state) {
   $scope.login = () => {
@@ -190,11 +264,23 @@ function LoginCtrl ($rootScope, $scope, $sessionStorage, $http, $state) {
 }
 LoginCtrl.$inject = ['$rootScope', '$scope', '$sessionStorage', '$http', '$state'];
 
-function HeaderDirective ($sessionStorage) {
+function HeaderDirective ($http, $sessionStorage, sse) {
   return {
     restrict: 'A',
     link (scope) {
       scope.currentUser = $sessionStorage.currentUser;
+      scope.onlineUsers = 0;
+
+      sse.subscribe('notification', function onNotification (data) {
+        scope.onlineUsers = data['online_users'];
+      });
+
+      sse.connect().then(() => {
+        $http.get('/api/friends?summary=count').then(response => {
+          let { data } = response;
+          scope.onlineUsers = data['count'];
+        })
+      });
     },
     template: `
     <nav class="navbar navbar-default navbar-fixtop">
@@ -226,12 +312,17 @@ function HeaderDirective ($sessionStorage) {
               <button class="btn navbar-btn btn-small btn-danger"><i class="fa fa-power-off"></i> Log out</button>
             </li>
           </ul>
+          <div class="navbar-text navbar-center">
+            <i class="fa fa-circle green"></i>
+            <span ng-bind="onlineUsers"></span>
+            <span>users are currently online</span>
+          </div>
         </div>
       </div>
     </nav>`
   }
 }
-HeaderDirective.$inject = ['$sessionStorage'];
+HeaderDirective.$inject = ['$http', '$sessionStorage', 'sse'];
 app.directive('uiHeader', HeaderDirective);
 
 app.config(['$locationProvider', '$stateProvider', function ($locationProvider, $stateProvider) {

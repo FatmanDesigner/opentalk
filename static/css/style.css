@@ -98,3 +98,19 @@
 .message-text {
   overflow: auto;
 }
+
+.green {
+  color: chartreuse;
+}
+
+/* =======================
+ * BOOTSTRAP REDEFINED
+ * =======================*/
+.navbar-center {
+  float: none;
+  width: 50%;
+  margin-left: auto;
+  margin-right: auto;
+
+  text-align: center;
+}
