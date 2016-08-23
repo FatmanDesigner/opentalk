@@ -25,17 +25,6 @@
     </div>
     <div class="col-md-8" ng-if="currentConversationID">
       <div class="panel panel-chat">
-        <div class="message">
-          <div class="message-toolbox">
-            <button ng-click="sendChatMessage(message.content)"
-                class="btn btn-success btn-block">Send</button>
-          </div>
-          <div class="message-text">
-            <textarea ng-model="message.content" name="name"
-                      ng-model-options="{ updateOn: 'default blur'}"
-                      rows="3"></textarea>
-          </div>
-        </div>
         <div class="conversation">
           <div class="conversation-item clearfix"
                ng-class="{'text-left': item.isMyMessage, 'text-right': !item.isMyMessage}"
@@ -50,6 +39,17 @@
               <small class="message-created-at" ng-bind="::item.created_at | asDate | date:'shortTime':tzOffset"></small>
               <div ng-bind="::item.text"></div>
             </div>
+          </div>
+        </div>
+        <div class="message">
+          <div class="message-toolbox">
+            <button ng-click="sendChatMessage(message.content)"
+                class="btn btn-success btn-block">Send</button>
+          </div>
+          <div class="message-text">
+            <textarea ng-model="message.content" name="name"
+                      ng-model-options="{ updateOn: 'default blur'}"
+                      rows="3"></textarea>
           </div>
         </div>
       </div>

@@ -70,9 +70,9 @@ html, body {
 
 /* Conversation */
 .conversation {
-
+  height: 75vh;
+  overflow: scroll;
 }
-
 .conversation-item {
   padding-bottom: 1em;
 }

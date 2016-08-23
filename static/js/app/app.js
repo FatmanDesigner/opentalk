@@ -164,7 +164,7 @@ function ServerSentEventSource ($rootScope, $q) {
 ServerSentEventSource.$inject = ['$rootScope', '$q'];
 app.service('sse', ServerSentEventSource);
 
-function ChatroomCtrl ($rootScope, $scope, $sessionStorage, $http, conversationService, sse) {
+function ChatroomCtrl ($rootScope, $scope, $element, $timeout, $sessionStorage, $http, conversationService, sse) {
   getFriendList();
 
   $scope.friends = [];
@@ -249,15 +249,21 @@ function ChatroomCtrl ($rootScope, $scope, $sessionStorage, $http, conversationS
     });
   }
 
+
   function fetchConversation (conversationID, marker) {
     var promise = conversationService.fetchConversation(conversationID, marker);
     promise.then((messages) => {
       console.info(`[ChatroomCtrl.showConversation] Showing conversation with ${messages.length} messages...`);
       $scope.messages = $scope.messages.concat(messages);
+
+      $timeout(function () {
+        let $conversionItem = $element[0].querySelector('.conversation-item:last-child');
+        $conversionItem.scrollIntoView({behavior: 'smooth'});
+      }, 0);
     });
   }
 }
-ChatroomCtrl.$inject = ['$rootScope', '$scope', '$sessionStorage', '$http', 'conversationService', 'sse'];
+ChatroomCtrl.$inject = ['$rootScope', '$scope', '$element', '$timeout', '$sessionStorage', '$http', 'conversationService', 'sse'];
 
 function LoginCtrl ($rootScope, $scope, $sessionStorage, $http, $state) {
   $scope.login = () => {
