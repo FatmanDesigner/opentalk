@@ -32,14 +32,14 @@ class Message(Base):
     message_id = Column(Integer, autoincrement=True, primary_key=True)
     from_user = Column(String(20), nullable=False)
     inbox = Column(String(20), nullable=False)
-    created_at = Column(TIMESTAMP, nullable=False, default=lambda: (datetime.datetime.now().replace(microsecond=0)))
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: (datetime.datetime.utcnow().replace(microsecond=0)))
     text = Column(String(255), nullable=False)
 
     def to_dict(self):
         return dict(message_id=self.message_id,
                     from_user=self.from_user,
                     inbox=self.inbox,
-                    created_at=str(self.created_at),
+                    created_at=self.created_at.isoformat(),
                     text=self.text)
 
 
@@ -51,7 +51,7 @@ class UndeliveredMessage(Base):
     message_id = Column(Integer, ForeignKey('messages.message_id'))
     # to_user is not the same as inbox
     to_user = Column(String(20), nullable=False)
-    created_at = Column(TIMESTAMP, nullable=False, default=lambda: (datetime.datetime.now().replace(microsecond=0)))
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: (datetime.datetime.utcnow().replace(microsecond=0)))
 
     message = relationship('Message')
 

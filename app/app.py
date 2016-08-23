@@ -201,7 +201,7 @@ class ConversationHandler(web.RequestHandler):
         marker = int(message.created_at.timestamp())
 
         for user in users:
-            self.application.notify_waiter(user, 'inbox', {'inbox': inbox, 'marker': marker})
+            self.application.notify_waiter(user, 'inbox', inbox=inbox, marker=marker)
 
         yield self.flush()
 

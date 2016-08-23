@@ -168,8 +168,17 @@ function ChatroomCtrl ($rootScope, $scope, $sessionStorage, $http, conversationS
   getFriendList();
 
   $scope.friends = [];
+  $scope.selectedFriend = null;
   $scope.currentConversationID = null;
+
+  $scope.message = {content: ''};
   $scope.messages = [];
+
+  $scope.tzOffset = (function () {
+    let leftPaddedTzOffset = '0' + -(new Date().getTimezoneOffset());
+    return (leftPaddedTzOffset.length === 4)?leftPaddedTzOffset:leftPaddedTzOffset.substr(1);
+  })();
+  $scope.tzOffset = 'GMT+0800';
 
   sse.subscribe('inbox', function onInbox (inbox, marker) {
     if (inbox !== $scope.currentConversationID) {
@@ -189,6 +198,16 @@ function ChatroomCtrl ($rootScope, $scope, $sessionStorage, $http, conversationS
   sse.connect();
 
   $scope.startChattingWithFriend = (friend) => {
+    if ($scope.selectedFriend && friend !== $scope.selectedFriend) {
+      $scope.selectedFriend.isSelected = false;
+      $scope.selectedFriend = friend;
+      friend.isSelected = true;
+    }
+    else if (!$scope.selectedFriend) {
+      $scope.selectedFriend = friend;
+      $scope.selectedFriend.isSelected = true;
+    }
+
     let currentConversationID = conversationService.createConversationID($sessionStorage.currentUser.id, friend.id);
     console.info(`[ChatroomCtrl] Starting a chat with ${friend.id}`);
     $scope.messages = [];
@@ -212,8 +231,8 @@ function ChatroomCtrl ($rootScope, $scope, $sessionStorage, $http, conversationS
     promise.then((response) => {
       console.log(response);
 
-      if ($scope.message === message) {
-        $scope.message = '';
+      if ($scope.message.content === message) {
+        $scope.message.content = '';
       }
       else {
         console.warn(`[ChatroomCtrl] Current message has changed. Cannot clear`);
@@ -324,6 +343,12 @@ function HeaderDirective ($http, $sessionStorage, sse) {
 }
 HeaderDirective.$inject = ['$http', '$sessionStorage', 'sse'];
 app.directive('uiHeader', HeaderDirective);
+
+app.filter('asDate', function () {
+  return function (input) {
+    return new Date(input);
+  };
+});
 
 app.config(['$locationProvider', '$stateProvider', function ($locationProvider, $stateProvider) {
   $locationProvider.html5Mode(false);

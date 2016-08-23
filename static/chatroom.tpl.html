@@ -3,15 +3,16 @@
   <div class="ui-chatroom row">
     <div class="col-md-3">
       <div class="list-group friend-list">
-        <header>EVERYONE</header>
+        <header>The whole crowd</header>
         <div ng-repeat="friend in friends"
+             ng-click="startChattingWithFriend(friend)"
+             ng-class="{'active': friend.isSelected}"
              class="list-group-item">
           <div class="friend-list-avatar">
             <img ng-src="{{'http://dummyimage.com/100x100/000/fff&text=' + friend.id.substring(0,1)}}"
                  alt="{{item.from_user}}">
           </div>
-          <span ng-click="startChattingWithFriend(friend)"
-                ng-bind="friend.username"></span>
+          <span ng-bind="friend.username"></span>
           <span ng-if="friend.hasUnread"
                 class="badge badge-info"><i class="fa fa-exclamation-circle"></i></span>
         </div>
@@ -26,11 +27,13 @@
       <div class="panel panel-chat">
         <div class="message">
           <div class="message-toolbox">
-            <button ng-click="sendChatMessage(message)"
+            <button ng-click="sendChatMessage(message.content)"
                 class="btn btn-success btn-block">Send</button>
           </div>
           <div class="message-text">
-            <textarea ng-model="message" name="name" rows="3"></textarea>
+            <textarea ng-model="message.content" name="name"
+                      ng-model-options="{ updateOn: 'default blur'}"
+                      rows="3"></textarea>
           </div>
         </div>
         <div class="conversation">
@@ -44,7 +47,7 @@
             </div>
 
             <div class="message-text">
-              <div class="message-created-at" ng-bind="::item.created_at"></div>
+              <small class="message-created-at" ng-bind="::item.created_at | asDate | date:'shortTime':tzOffset"></small>
               <div ng-bind="::item.text"></div>
             </div>
           </div>
