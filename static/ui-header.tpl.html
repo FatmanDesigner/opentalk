@@ -1,0 +1,53 @@
+<nav class="navbar navbar-default navbar-fixtop">
+  <div class="container-fluid">
+    <div class="navbar-header">
+      <div class="btn-group pull-right visible-xs">
+        <button type="button" class="btn btn-default btn-md navbar-btn"
+              ng-click="toggleCollapse()"
+              aria-expanded="false"
+              aria-controls="navbar">
+          <i class="fa fa-bars"></i>
+        </button>
+        <button ng-click="toggleFriends()"
+                class="btn btn-info btn-md navbar-btn">
+          <i class="fa fa-users"></i>
+        </button>
+      </div>
+
+      <a class="navbar-brand" href="#">OpenTalk</a>
+      <div class="navbar-text visible-xs">
+        <i class="fa fa-circle green"></i>
+        <span ng-if="onlineUsers > 1">{{onlineUsers}} online users.</span>
+        <span ng-if="onlineUsers === 1">You are the only user online.</span>
+      </div>
+    </div>
+    <div id="navbar"
+         ng-class="{'in': isMenuIn}"
+         class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        <li class="active"><a href="#">Chat Room</a></li>
+        <li>
+          <a href="https://github.com/khanhhua/opentalk">
+            <i class="fa fa-github"></i> Fork me!
+          </a>
+        </li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        <li class="visible-xs-inline-block visible-sm-block visible-md-block visible-lg-block">
+          <a><i class="fa fa-user"></i> {{currentUser.id}}</a>
+        </li>
+        <li class="visible-xs-inline-block visible-sm-block visible-md-block visible-lg-block">
+          <button ng-click="logout()"
+                  class="navbar-btn btn btn-sm btn-danger">
+            <i class="fa fa-power-off"></i> Log out
+          </button>
+        </li>
+      </ul>
+      <div class="navbar-text navbar-center hidden-xs">
+        <i class="fa fa-circle green"></i>
+        <span ng-if="onlineUsers > 1">{{onlineUsers}} users are currently online.</span>
+        <span ng-if="onlineUsers === 1">You are the only user online.</span>
+      </div>
+    </div>
+  </div>
+</nav>

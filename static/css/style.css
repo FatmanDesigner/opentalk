@@ -118,6 +118,10 @@ html, body {
 /* =======================
  * BOOTSTRAP REDEFINED
  * =======================*/
+.navbar-header .btn-group.pull-right {
+  margin-right: 15px;
+}
+
 .navbar-brand {
   font-weight: 700;
 }
@@ -144,4 +148,63 @@ html, body {
 
 .panel-dark .panel-body {
   color: white;
+}
+
+.panel-aside {
+  border: none;
+}
+
+.panel-aside .panel-heading {
+  border-bottom: 1px solid #ccc;
+  padding-left: 1px;
+  padding-right: 1px;
+}
+/* =======================
+ * OFF-CANVAS
+ * =======================*/
+.off-canvas {
+}
+
+.off-canvas > main {
+
+}
+
+.off-canvas > aside {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 100%;
+
+  display: block;
+  width: 100%;
+
+  overflow: auto;
+
+  -webkit-transition: transform 300ms ease-out;
+  -moz-transition: transform 300ms ease-out;
+  -ms-transition: transform 300ms ease-out;
+  -o-transition: transform 300ms ease-out;
+  transition: transform 300ms ease-out;
+
+  z-index: 1000;
+}
+
+.off-canvas.swiped-left > aside {
+  -webkit-transform: translateX(-100%);
+  -moz-transform: translateX(-100%);
+  -ms-transform: translateX(-100%);
+  -o-transform: translateX(-100%);
+  transform: translateX(-100%);
+
+  margin-left: 30px;
+
+  background: white;
+  -webkit-box-shadow: -5px 0px 5px 0 rgba(0,0,0,0.3);
+  -moz-box-shadow: -5px 0px 5px 0 rgba(0,0,0,0.3);
+  box-shadow: -5px 0px 5px 0 rgba(0,0,0,0.3);
+}
+
+.off-canvas > aside > .container {
+  height: 85vh;
+  overflow: auto;
 }

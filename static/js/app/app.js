@@ -209,6 +209,8 @@ app.service('authService', AuthenticationService);
 
 function ChatroomCtrl ($rootScope, $scope, $element, $timeout, $sessionStorage, $http, conversationService, sse) {
   getFriendList();
+  // UI Bound variables
+  $scope.showingRightSide = false;
 
   $scope.friends = [];
   $scope.selectedFriend = null;
@@ -251,6 +253,8 @@ function ChatroomCtrl ($rootScope, $scope, $element, $timeout, $sessionStorage, 
       $scope.selectedFriend.isSelected = true;
     }
 
+    $scope.showingRightSide = false;
+
     let currentConversationID = conversationService.createConversationID($sessionStorage.currentUser.id, friend.id);
     console.info(`[ChatroomCtrl] Starting a chat with ${friend.id}`);
     $scope.messages = [];
@@ -283,6 +287,17 @@ function ChatroomCtrl ($rootScope, $scope, $element, $timeout, $sessionStorage, 
     });
   };
 
+  $scope.handleKeypress = function (e, message) {
+    if (e.keyCode === 13) {
+      e.preventDefault();
+      $scope.sendChatMessage(message);
+    }
+  };
+
+  $scope.toggleRightSide = () => {
+    $scope.showingRightSide = !$scope.showingRightSide;
+  };
+
   function getFriendList () {
     $http.get(`/api/friends`).then((response) => {
       console.log(response.data);
@@ -291,7 +306,6 @@ function ChatroomCtrl ($rootScope, $scope, $element, $timeout, $sessionStorage, 
       $scope.friends = users;
     });
   }
-
 
   function fetchConversation (conversationID, marker) {
     var promise = conversationService.fetchConversation(conversationID, marker);
@@ -315,22 +329,6 @@ function LoginCtrl ($rootScope, $scope, authService, $http, $state) {
     authService.login($scope.user_id, $scope.username).then(() => {
       $state.go('authorized');
     });
-    //let promise = $http.post('/api/auth', {
-    //  user_id: $scope.user_id,
-    //  username: $scope.username
-    //});
-    //
-    //promise.then((response) => {
-    //  console.log(`[LoginCtrl] Login status: ${response.data}`);
-    //  let { data } = response;
-    //  if (data === 'ok') {
-    //    $sessionStorage.currentUser = {
-    //      id: $scope.user_id
-    //    };
-    //
-    //    $state.go('authorized');
-    //  }
-    //})
   };
 }
 LoginCtrl.$inject = ['$rootScope', '$scope', 'authService', '$http', '$state'];
@@ -338,6 +336,9 @@ LoginCtrl.$inject = ['$rootScope', '$scope', 'authService', '$http', '$state'];
 function HeaderDirective ($http, authService, sse) {
   return {
     restrict: 'A',
+    scope: {
+      toggleFriends: '&'
+    },
     link (scope, element) {
       scope.currentUser = authService.currentUser;
       scope.onlineUsers = 0;
@@ -361,56 +362,7 @@ function HeaderDirective ($http, authService, sse) {
         scope.isMenuIn = !scope.isMenuIn;
       };
     },
-    template: `
-    <nav class="navbar navbar-default navbar-fixtop">
-      <div class="container-fluid">
-        <div class="navbar-header">
-          <button type="button" class="navbar-toggle collapsed"
-                  ng-click="toggleCollapse()"
-                  aria-expanded="false"
-                  aria-controls="navbar">
-            <span class="sr-only">Toggle navigation</span>
-            <span class="icon-bar"></span>
-            <span class="icon-bar"></span>
-            <span class="icon-bar"></span>
-          </button>
-          <a class="navbar-brand" href="#">OpenTalk</a>
-          <div class="navbar-text visible-xs">
-            <i class="fa fa-circle green"></i>
-            <span ng-if="onlineUsers > 1">{{onlineUsers}} online users.</span>
-            <span ng-if="onlineUsers === 1">You are the only user online.</span>
-          </div>
-        </div>
-        <div id="navbar"
-             ng-class="{'in': isMenuIn}"
-             class="navbar-collapse collapse">
-          <ul class="nav navbar-nav">
-            <li class="active"><a href="#">Chat Room</a></li>
-            <li>
-              <a href="https://github.com/khanhhua/opentalk">
-                <i class="fa fa-github"></i> Fork me!
-              </a>
-            </li>
-          </ul>
-          <ul class="nav navbar-nav navbar-right">
-            <li class="visible-xs-inline-block visible-sm-block visible-md-block visible-lg-block">
-              <a><i class="fa fa-user"></i> {{currentUser.id}}</a>
-            </li>
-            <li class="visible-xs-inline-block visible-sm-block visible-md-block visible-lg-block">
-              <button ng-click="logout()"
-                      class="btn navbar-btn btn-small btn-danger">
-                <i class="fa fa-power-off"></i> Log out
-              </button>
-            </li>
-          </ul>
-          <div class="navbar-text navbar-center hidden-xs">
-            <i class="fa fa-circle green"></i>
-            <span ng-if="onlineUsers > 1">{{onlineUsers}} users are currently online.</span>
-            <span ng-if="onlineUsers === 1">You are the only user online.</span>
-          </div>
-        </div>
-      </div>
-    </nav>`
+    templateUrl: '/ui-header.tpl.html'
   }
 }
 HeaderDirective.$inject = ['$http', 'authService', 'sse'];

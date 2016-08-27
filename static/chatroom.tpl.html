@@ -1,9 +1,78 @@
-<header ui-header></header>
-<div class="container">
-  <div class="ui-chatroom row">
-    <div class="col-md-3">
-      <div class="list-group friend-list">
-        <header>The whole crowd</header>
+<div class="off-canvas" ng-class="{'swiped-left': showingRightSide}">
+  <main>
+    <header ui-header toggle-friends="toggleRightSide()"></header>
+    <div class="container">
+      <div class="ui-chatroom row">
+        <div class="col-sm-4 hidden-xs">
+          <div class="list-group friend-list">
+            <header>The whole crowd</header>
+            <div ng-repeat="friend in friends"
+                 ng-click="startChattingWithFriend(friend)"
+                 ng-class="{'active': friend.isSelected}"
+                 class="list-group-item">
+              <div class="friend-list-avatar">
+                <img ng-src="{{'http://dummyimage.com/100x100/000/fff&text=' + friend.id.substring(0,1)}}"
+                     alt="{{item.from_user}}">
+              </div>
+              <span ng-bind="friend.username"></span>
+              <span ng-if="friend.hasUnread"
+                    class="badge badge-info"><i class="fa fa-exclamation-circle"></i></span>
+            </div>
+          </div>
+        </div>
+        <div class="col-sm-8" ng-if="!currentConversationID">
+          <div class="alert alert-info">
+            Select a friend to start chatting...
+          </div>
+        </div>
+        <div class="col-md-8" ng-if="currentConversationID">
+          <div class="panel panel-chat">
+            <div class="conversation">
+              <div class="conversation-item clearfix"
+                   ng-class="{'text-left': item.isMyMessage, 'text-right': !item.isMyMessage}"
+                   ng-repeat="item in messages">
+
+                <div class="message-from-user" ng-class="::{'pull-left': item.isMyMessage, 'pull-right': !item.isMyMessage}">
+                  <img ng-src="{{'http://dummyimage.com/100x100/000/fff&text=' + item.from_user.substring(0,1)}}"
+                       alt="{{item.from_user}}">
+                </div>
+
+                <div class="message-text">
+                  <small class="message-created-at" ng-bind="::item.created_at | asDate | date:'shortTime':tzOffset"></small>
+                  <div ng-bind="::item.text"></div>
+                </div>
+              </div>
+            </div>
+            <div class="message">
+              <div class="message-toolbox hidden-xs">
+                <button ng-click="sendChatMessage(message.content)"
+                    class="btn btn-success btn-block">Send</button>
+              </div>
+              <div class="message-text">
+                <textarea ng-model="message.content" name="name"
+                          ng-model-options="{ updateOn: 'default blur'}"
+                          ng-keypress="handleKeypress($event, message.content)"
+                          rows="3"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <aside>
+    <nav class="navbar navbar-default">
+      <div class="container-fluid">
+        <button class="btn btn-sm navbar-btn btn-default"
+                ng-click="toggleRightSide()">
+          Close
+        </button>
+      </div>
+    </nav>
+    <div class="container">
+      <div class="panel panel-aside">
+        <div class="panel-heading">The Crowd</div>
+        <div class="list-group friend-list">
         <div ng-repeat="friend in friends"
              ng-click="startChattingWithFriend(friend)"
              ng-class="{'active': friend.isSelected}"
@@ -17,42 +86,7 @@
                 class="badge badge-info"><i class="fa fa-exclamation-circle"></i></span>
         </div>
       </div>
-    </div>
-    <div class="col-md-9" ng-if="!currentConversationID">
-      <div class="alert alert-info">
-        Select a friend to start chatting...
       </div>
     </div>
-    <div class="col-md-8" ng-if="currentConversationID">
-      <div class="panel panel-chat">
-        <div class="conversation">
-          <div class="conversation-item clearfix"
-               ng-class="{'text-left': item.isMyMessage, 'text-right': !item.isMyMessage}"
-               ng-repeat="item in messages">
-
-            <div class="message-from-user" ng-class="::{'pull-left': item.isMyMessage, 'pull-right': !item.isMyMessage}">
-              <img ng-src="{{'http://dummyimage.com/100x100/000/fff&text=' + item.from_user.substring(0,1)}}"
-                   alt="{{item.from_user}}">
-            </div>
-
-            <div class="message-text">
-              <small class="message-created-at" ng-bind="::item.created_at | asDate | date:'shortTime':tzOffset"></small>
-              <div ng-bind="::item.text"></div>
-            </div>
-          </div>
-        </div>
-        <div class="message">
-          <div class="message-toolbox">
-            <button ng-click="sendChatMessage(message.content)"
-                class="btn btn-success btn-block">Send</button>
-          </div>
-          <div class="message-text">
-            <textarea ng-model="message.content" name="name"
-                      ng-model-options="{ updateOn: 'default blur'}"
-                      rows="3"></textarea>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+  </aside>
 </div>
