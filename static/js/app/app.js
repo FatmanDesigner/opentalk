@@ -58,9 +58,10 @@ ConversationService.$inject = ['$sessionStorage', '$http'];
 app.service('conversationService', ConversationService);
 
 function ServerSentEventSource ($rootScope, $q) {
+  let source;
+
   let dispose = null;
-  let isConnecting = false;
-  let isConnected = false;
+  let isAcked = false;
 
   const EVENT_INBOX = 'inbox';
   const EVENT_NOTIFICATION = 'notification';
@@ -104,32 +105,33 @@ function ServerSentEventSource ($rootScope, $q) {
     });
   }
 
+  function onerror (e) {
+    source.close();
+    source = null;
+    isAcked = false;
+  }
+
   let deferred;
   return {
     connect () {
-      if (isConnected) {
-        deferred.resolve();
+      if (source) { // && source.readyState === EventSource.OPEN) {
         return deferred.promise;
       }
-      if (isConnecting) {
-        return deferred.promise;
-      }
+      //if (source && source.readyState === EventSource.CONNECTING) {
+      //  return deferred.promise;
+      //}
       deferred = $q.defer();
-      isConnecting = true;
 
-      var source = new EventSource('/stream');
+      source = new EventSource('/stream');
       dispose = function dispose() {
         deferred = null;
         source.close();
+        source = null;
       };
 
-      source.onerror = function () {
-        isConnecting = false;
-        isConnected = false;
-      };
+      source.onerror = onerror;
       source.addEventListener('ack', function (event) {
-        isConnecting = false;
-        isConnected = true;
+        isAcked = true;
 
         deferred.resolve();
       });
@@ -155,14 +157,55 @@ function ServerSentEventSource ($rootScope, $q) {
     },
     disconnect () {
       dispose && dispose();
-
-      isConnecting = false;
-      isConnected = false;
     }
   }
 }
 ServerSentEventSource.$inject = ['$rootScope', '$q'];
 app.service('sse', ServerSentEventSource);
+
+function AuthenticationService ($http, $rootScope, $q, $sessionStorage, $state) {
+  return {
+    get currentUser () {
+      return $sessionStorage.currentUser;
+    },
+    login (userID, username) {
+      console.log(`[LoginCtrl] Logging in as ${userID} => ${username}`);
+
+      let promise = $http.post('/api/auth', {
+        user_id: userID,
+        username: username
+      });
+
+      return promise.then((response) => {
+        console.log(`[LoginCtrl] Login status: ${response.data}`);
+        let { data } = response;
+        if (data === 'ok') {
+          $sessionStorage.currentUser = {
+            id: userID
+          };
+
+          return true;
+        }
+        else {
+          return false;
+        }
+      })
+    },
+    logout () {
+      if (!$sessionStorage.currentUser) {
+        return;
+      }
+      let promise = $http.delete('/api/auth');
+      return promise.then(() => {
+        delete $sessionStorage.currentUser;
+
+        $state.go('login');
+      });
+    }
+  };
+}
+AuthenticationService.$inject = ['$http', '$rootScope', '$q', '$sessionStorage', '$state'];
+app.service('authService', AuthenticationService);
 
 function ChatroomCtrl ($rootScope, $scope, $element, $timeout, $sessionStorage, $http, conversationService, sse) {
   getFriendList();
@@ -265,35 +308,38 @@ function ChatroomCtrl ($rootScope, $scope, $element, $timeout, $sessionStorage, 
 }
 ChatroomCtrl.$inject = ['$rootScope', '$scope', '$element', '$timeout', '$sessionStorage', '$http', 'conversationService', 'sse'];
 
-function LoginCtrl ($rootScope, $scope, $sessionStorage, $http, $state) {
+function LoginCtrl ($rootScope, $scope, authService, $http, $state) {
   $scope.login = () => {
     console.log(`[LoginCtrl] Logging in as ${$scope.user_id} => ${$scope.username}`);
 
-    let promise = $http.post('/api/auth', {
-      user_id: $scope.user_id,
-      username: $scope.username
+    authService.login($scope.user_id, $scope.username).then(() => {
+      $state.go('authorized');
     });
-
-    promise.then((response) => {
-      console.log(`[LoginCtrl] Login status: ${response.data}`);
-      let { data } = response;
-      if (data === 'ok') {
-        $sessionStorage.currentUser = {
-          id: $scope.user_id
-        };
-
-        $state.go('authorized');
-      }
-    })
+    //let promise = $http.post('/api/auth', {
+    //  user_id: $scope.user_id,
+    //  username: $scope.username
+    //});
+    //
+    //promise.then((response) => {
+    //  console.log(`[LoginCtrl] Login status: ${response.data}`);
+    //  let { data } = response;
+    //  if (data === 'ok') {
+    //    $sessionStorage.currentUser = {
+    //      id: $scope.user_id
+    //    };
+    //
+    //    $state.go('authorized');
+    //  }
+    //})
   };
 }
-LoginCtrl.$inject = ['$rootScope', '$scope', '$sessionStorage', '$http', '$state'];
+LoginCtrl.$inject = ['$rootScope', '$scope', 'authService', '$http', '$state'];
 
-function HeaderDirective ($http, $sessionStorage, sse) {
+function HeaderDirective ($http, authService, sse) {
   return {
     restrict: 'A',
-    link (scope) {
-      scope.currentUser = $sessionStorage.currentUser;
+    link (scope, element) {
+      scope.currentUser = authService.currentUser;
       scope.onlineUsers = 0;
 
       sse.subscribe('notification', function onNotification (data) {
@@ -306,21 +352,38 @@ function HeaderDirective ($http, $sessionStorage, sse) {
           scope.onlineUsers = data['count'];
         })
       });
+
+      scope.logout = function () {
+        authService.logout();
+      };
+
+      scope.toggleCollapse = function () {
+        scope.isMenuIn = !scope.isMenuIn;
+      };
     },
     template: `
     <nav class="navbar navbar-default navbar-fixtop">
       <div class="container-fluid">
         <div class="navbar-header">
-          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+          <button type="button" class="navbar-toggle collapsed"
+                  ng-click="toggleCollapse()"
+                  aria-expanded="false"
+                  aria-controls="navbar">
             <span class="sr-only">Toggle navigation</span>
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
           <a class="navbar-brand" href="#">OpenTalk</a>
+          <div class="navbar-text visible-xs">
+            <i class="fa fa-circle green"></i>
+            <span ng-if="onlineUsers > 1">{{onlineUsers}} online users.</span>
+            <span ng-if="onlineUsers === 1">You are the only user online.</span>
+          </div>
         </div>
-        <div id="navbar" class="navbar-collapse collapse">
-
+        <div id="navbar"
+             ng-class="{'in': isMenuIn}"
+             class="navbar-collapse collapse">
           <ul class="nav navbar-nav">
             <li class="active"><a href="#">Chat Room</a></li>
             <li>
@@ -330,14 +393,17 @@ function HeaderDirective ($http, $sessionStorage, sse) {
             </li>
           </ul>
           <ul class="nav navbar-nav navbar-right">
-            <li>
+            <li class="visible-xs-inline-block visible-sm-block visible-md-block visible-lg-block">
               <a><i class="fa fa-user"></i> {{currentUser.id}}</a>
             </li>
-            <li>
-              <button class="btn navbar-btn btn-small btn-danger"><i class="fa fa-power-off"></i> Log out</button>
+            <li class="visible-xs-inline-block visible-sm-block visible-md-block visible-lg-block">
+              <button ng-click="logout()"
+                      class="btn navbar-btn btn-small btn-danger">
+                <i class="fa fa-power-off"></i> Log out
+              </button>
             </li>
           </ul>
-          <div class="navbar-text navbar-center">
+          <div class="navbar-text navbar-center hidden-xs">
             <i class="fa fa-circle green"></i>
             <span ng-if="onlineUsers > 1">{{onlineUsers}} users are currently online.</span>
             <span ng-if="onlineUsers === 1">You are the only user online.</span>
@@ -347,7 +413,7 @@ function HeaderDirective ($http, $sessionStorage, sse) {
     </nav>`
   }
 }
-HeaderDirective.$inject = ['$http', '$sessionStorage', 'sse'];
+HeaderDirective.$inject = ['$http', 'authService', 'sse'];
 app.directive('uiHeader', HeaderDirective);
 
 app.filter('asDate', function () {

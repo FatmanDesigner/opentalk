@@ -129,3 +129,19 @@ html, body {
 
   text-align: center;
 }
+
+.navbar-right .visible-xs-inline-block:last-child {
+  float: right;
+  margin-left: auto;
+  margin-right: 15px;
+}
+
+.panel-dark {
+  background: #111;
+
+  border: 1px solid #000;
+}
+
+.panel-dark .panel-body {
+  color: white;
+}

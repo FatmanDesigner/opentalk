@@ -49,6 +49,12 @@ class AuthHandler(ApiHandler):
         self.set_secure_cookie("user", user_id)
         self.write(json_encode('ok'))
 
+    def delete(self):
+        user = self.current_user
+        self.application.notify_waiter(user, 'logout')
+
+        self.clear_cookie('user')
+        self.write(json_encode('ok'))
 
 class ChannelHandler(ApiHandler):
 
@@ -80,6 +86,12 @@ class ChannelHandler(ApiHandler):
                 self.send_messages(inbox, marker)
             elif type == 'notification':
                 self.send_notification(data)
+            elif type == 'logout':
+                self.application.db.update_user(user, status=User.STATUS_OFFLINE)
+                self.application.cancel_wait(user)
+                self.update_user_presence_stats()
+                self.finish()
+                break
 
             try:
                 yield self.flush()
