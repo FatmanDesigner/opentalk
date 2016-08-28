@@ -303,10 +303,15 @@ def make_app():
     static_dir = path.realpath(path.join(base_dir, 'static'))
     print("Using static dir: {}".format(static_dir))
 
-    makedirs(path.realpath(path.join(base_dir, 'run')))
-    database_path = path.realpath(path.join(base_dir, 'run', 'db.sqlite'))
-    print("Using database path: {}".format(database_path))
-    db = Db('sqlite:///' + database_path)
+    # makedirs(path.realpath(path.join(base_dir, 'run')))
+    # database_path = path.realpath(path.join(base_dir, 'run', 'db.sqlite'))
+    # print("Using database path: {}".format(database_path))
+    conn_string = environ.get('DATABASE_URL', None)
+    if conn_string is None:
+        exit('Database configuration not found')
+        return
+
+    db = Db(conn_string)
     db.create_all()
 
     return Application(
