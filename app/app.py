@@ -69,7 +69,10 @@ class ChannelHandler(ApiHandler):
             self.send_error(status_code=403, reason='Not authorized')
             return
 
-        self.application.db.update_user(user, status=User.STATUS_ONLINE)
+        update_result = self.application.db.update_user(user, status=User.STATUS_ONLINE)
+        if not update_result:
+            self.send_error(status_code=403, reason='Not authorized')
+            return
         self.update_user_presence_stats()
 
         self.write('event: ack\ndata: {}\n\n'.format(int(time())))

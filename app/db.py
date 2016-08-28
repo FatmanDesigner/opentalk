@@ -132,6 +132,8 @@ class Db(object):
     def update_user(self, user_id, **kwargs):
         session = self.sessionmaker()
         user = session.query(User).get(user_id)
+        if user is None:
+            return False
 
         if 'status' in kwargs:
             user.status = kwargs['status']
