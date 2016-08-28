@@ -293,7 +293,7 @@ class Application(web.Application):
 
         def send_heart_beat():
             print('[Application::send_heart_beat] Sending heart beat signal...')
-            users = self.waiters.keys()
+            users = tuple(self.waiters.keys())
             for user in users:
                 self.notify_waiter(user, 'heartbeat')
 
