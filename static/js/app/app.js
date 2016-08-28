@@ -60,8 +60,9 @@ app.service('conversationService', ConversationService);
 function ServerSentEventSource ($rootScope, $q, $http) {
   let source;
 
-  let dispose = null;
+  let disposeEventSource = null;
   let isAcked = false;
+  let deferred;
 
   const EVENT_INBOX = 'inbox';
   const EVENT_NOTIFICATION = 'notification';
@@ -70,6 +71,91 @@ function ServerSentEventSource ($rootScope, $q, $http) {
     [EVENT_INBOX]: [],
     [EVENT_NOTIFICATION]: []
   };
+
+  function connect () {
+    if (source) { // && source.readyState === EventSource.OPEN) {
+      return deferred.promise;
+    }
+    console.debug('[ServerSentEventSource] Connecting to event source...');
+
+    deferred = $q.defer();
+
+    source = new EventSource('/stream');
+    disposeEventSource = function disposeEventSource() {
+      deferred = null;
+      source.close();
+      source = null;
+    };
+
+    source.onerror = onerror;
+    source.addEventListener('ack', function (event) {
+      isAcked = true;
+
+      console.info('[ServerSentEventSource] Connected to event source');
+      deferred.resolve();
+    });
+    source.addEventListener('inbox', onmessage);
+    source.addEventListener('notification', onmessage);
+
+    return deferred.promise;
+  }
+
+  function disconnect () {
+    console.debug('[ServerSentEventSource] Disconnecting from event source...');
+    disposeEventSource && disposeEventSource();
+    disposeConnectivityMonitor && disposeConnectivityMonitor();
+  }
+
+  function subscribe (eventType, handler) {
+    if (!(eventType in handlers)) {
+      throw new Error(`event type ${eventType} is invalid`);
+    }
+    if (!handler || !angular.isFunction(handler)) {
+      throw new Error('handler is not a function', handler);
+    }
+
+    handlers[eventType].push(handler);
+
+    return function unsubsribe () {
+      let index = handlers[eventType].indexOf(handler);
+      handlers.splice(index, 1);
+    };
+  }
+
+  let disposeConnectivityMonitor = null;
+  function monitorConnectivity () {
+    // credit: https://www.audero.it/demo/page-visibility-api-demo.html
+    let hiddenProperty = 'hidden' in document ? 'hidden' :
+        'webkitHidden' in document ? 'webkitHidden' :
+            'mozHidden' in document ? 'mozHidden' : null;
+    let visibilityStateProperty = 'visibilityState' in document ? 'visibilityState' :
+        'webkitVisibilityState' in document ? 'webkitVisibilityState' :
+            'mozVisibilityState' in document ? 'mozVisibilityState' :
+                null;
+    var visibilityChangeEvent = hiddenProperty.replace(/hidden/i, 'visibilitychange');
+    if (!(hiddenProperty && visibilityStateProperty)) {
+      console.warn('[ServerSentEventSource] Cannot monitor connectivity on user`s device.');
+      return;
+    }
+    else {
+      function visibilityChangeEventHandler () {
+        console.debug('[ServerSentEventSource] visibilitychange event fired');
+
+        if (document[hiddenProperty] === true) {
+          disconnect();
+        }
+        else {
+          connect();
+        }
+      }
+      document.addEventListener(visibilityChangeEvent, visibilityChangeEventHandler);
+
+      disposeConnectivityMonitor = function disposeConnectivityMonitor () {
+        document.removeEventListener(visibilityChangeEvent, visibilityChangeEventHandler);
+      };
+      return disposeConnectivityMonitor;
+    }
+  }
 
   function onmessage(message) {
     $rootScope.$apply(function () {
@@ -134,53 +220,11 @@ function ServerSentEventSource ($rootScope, $q, $http) {
     isAcked = false;
   }
 
-  let deferred;
   return {
-    connect () {
-      if (source) { // && source.readyState === EventSource.OPEN) {
-        return deferred.promise;
-      }
-      //if (source && source.readyState === EventSource.CONNECTING) {
-      //  return deferred.promise;
-      //}
-      deferred = $q.defer();
-
-      source = new EventSource('/stream');
-      dispose = function dispose() {
-        deferred = null;
-        source.close();
-        source = null;
-      };
-
-      source.onerror = onerror;
-      source.addEventListener('ack', function (event) {
-        isAcked = true;
-
-        deferred.resolve();
-      });
-      source.addEventListener('inbox', onmessage);
-      source.addEventListener('notification', onmessage);
-
-      return deferred.promise;
-    },
-    subscribe (eventType, handler) {
-      if (!(eventType in handlers)) {
-        throw new Error(`event type ${eventType} is invalid`);
-      }
-      if (!handler || !angular.isFunction(handler)) {
-        throw new Error('handler is not a function', handler);
-      }
-
-      handlers[eventType].push(handler);
-
-      return function unsubsribe () {
-        let index = handlers[eventType].indexOf(handler);
-        handlers.splice(index, 1);
-      };
-    },
-    disconnect () {
-      dispose && dispose();
-    }
+    connect,
+    subscribe,
+    disconnect,
+    monitorConnectivity
   }
 }
 ServerSentEventSource.$inject = ['$rootScope', '$q', '$http'];
@@ -268,6 +312,7 @@ function ChatroomCtrl ($rootScope, $scope, $element, $timeout, $sessionStorage, 
     $scope.friends = usersList;
   });
   sse.connect();
+  sse.monitorConnectivity();
 
   $scope.startChattingWithFriend = (friend) => {
     if ($scope.selectedFriend && friend !== $scope.selectedFriend) {
@@ -382,6 +427,7 @@ function HeaderDirective ($http, authService, sse) {
 
       scope.logout = function () {
         authService.logout();
+        sse.disconnect();
       };
 
       scope.toggleCollapse = function () {
