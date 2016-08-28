@@ -3,7 +3,6 @@ from time import time, sleep
 import calendar
 import re
 
-from concurrent.futures import ThreadPoolExecutor
 from tornado.concurrent import Future
 from tornado.escape import json_decode, json_encode
 
@@ -255,7 +254,6 @@ class Application(web.Application):
         self.waiters = dict()
         self.waiter_results = dict()
 
-        self.heart_beat_executor = ThreadPoolExecutor(4)
         self.is_heart_beating = False
 
     @gen.coroutine
@@ -294,16 +292,14 @@ class Application(web.Application):
         print('[Application::start_heart_beats] Start sending heart beat signals...')
 
         def send_heart_beat():
-            while self.is_heart_beating:
-                print('[Application::send_heart_beat] Sending heart beat signal...')
-                users = self.waiters.keys()
-                for user in users:
-                    self.notify_waiter(user, 'heartbeat')
-
-                sleep(30)
+            print('[Application::send_heart_beat] Sending heart beat signal...')
+            users = self.waiters.keys()
+            for user in users:
+                self.notify_waiter(user, 'heartbeat')
 
         self.is_heart_beating = True
-        self.heart_beat_executor.submit(send_heart_beat)
+        sched = tornado.ioloop.PeriodicCallback(send_heart_beat, 30000)
+        sched.start()
 
 
 def make_app():
