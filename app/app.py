@@ -104,6 +104,7 @@ class ChannelHandler(ApiHandler):
             try:
                 yield self.flush()
             except tornado.iostream.StreamClosedError as e:
+                self.application.cancel_wait(self, user)
                 break
 
     def send_heart_beat(self):
