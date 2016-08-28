@@ -1,4 +1,4 @@
-from os import path
+from os import path, environ
 from time import time
 import calendar
 import re
@@ -66,7 +66,8 @@ class ChannelHandler(ApiHandler):
     def get(self):
         user = self.current_user
         if not user:
-            return self.send_error(status_code=403, reason='Not authorized')
+            self.send_error(status_code=403, reason='Not authorized')
+            return
 
         self.application.db.update_user(user, status=User.STATUS_ONLINE)
         self.update_user_presence_stats()
@@ -320,5 +321,7 @@ def make_app():
 
 if __name__ == "__main__":
     app = make_app()
-    app.listen(8888)
+
+    port = environ.get('PORT', '8888')
+    app.listen(int(port))
     tornado.ioloop.IOLoop.current().start()
