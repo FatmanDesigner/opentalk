@@ -296,8 +296,10 @@ class Application(web.Application):
         def send_heart_beat():
             while self.is_heart_beating:
                 print('[Application::send_heart_beat] Sending heart beat signal...')
-                for user_id, future in self.waiters.items():
-                    future.set_result(('heartbeat', ))
+                for user, future in self.waiters.items():
+                    result = ('heartbeat', )
+                    self.waiter_results[user] = result
+                    future.set_result(result)
 
                 sleep(30)
 
