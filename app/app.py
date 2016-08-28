@@ -1,4 +1,4 @@
-from os import path, environ
+from os import path, environ, makedirs
 from time import time
 import calendar
 import re
@@ -300,6 +300,7 @@ def make_app():
     static_dir = path.realpath(path.join(base_dir, 'static'))
     print("Using static dir: {}".format(static_dir))
 
+    makedirs(path.realpath(path.join(base_dir, 'run')))
     database_path = path.realpath(path.join(base_dir, 'run', 'db.sqlite'))
     print("Using database path: {}".format(database_path))
     db = Db('sqlite:///' + database_path)
