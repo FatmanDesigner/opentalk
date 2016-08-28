@@ -291,10 +291,14 @@ class Application(web.Application):
         del self.waiters[user]
 
     def start_heart_beats(self):
+        print('[Application::start_heart_beats] Start sending heart beat signals...')
+
         def send_heart_beat():
             while self.is_heart_beating:
+                print('[Application::send_heart_beat] Sending heart beat signal...')
                 for user_id, future in self.waiters.items():
                     future.set_result(('heartbeat', ))
+
                 sleep(30)
 
         self.is_heart_beating = True
