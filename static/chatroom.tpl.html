@@ -5,7 +5,7 @@
       <div class="ui-chatroom row">
         <div class="col-sm-4 hidden-xs">
           <div class="list-group friend-list">
-            <header>The whole crowd</header>
+            <header>The Crowd</header>
             <div ng-repeat="friend in friends"
                  ng-click="startChattingWithFriend(friend)"
                  ng-class="{'active': friend.isSelected}"
@@ -13,6 +13,10 @@
               <div class="friend-list-avatar">
                 <img ng-src="{{'http://dummyimage.com/100x100/000/fff&text=' + friend.id.substring(0,1)}}"
                      alt="{{item.from_user}}">
+                <div ng-if="friend.status==='online'"
+                     class="friend-list-indicator">
+                  <i class="fa fa-circle green"></i>
+                </div>
               </div>
               <span ng-bind="friend.username"></span>
               <span ng-if="friend.hasUnread"
@@ -53,6 +57,7 @@
                           ng-model-options="{ updateOn: 'default blur'}"
                           ng-keypress="handleKeypress($event, message.content)"
                           rows="3"></textarea>
+                <small>Hit "Return" or "Enter" to send message</small>
               </div>
             </div>
           </div>
@@ -80,8 +85,13 @@
           <div class="friend-list-avatar">
             <img ng-src="{{'http://dummyimage.com/100x100/000/fff&text=' + friend.id.substring(0,1)}}"
                  alt="{{item.from_user}}">
+            <div ng-if="friend.status==='online'"
+                 class="friend-list-indicator">
+              <i class="fa fa-circle green"></i>
+            </div>
           </div>
           <span ng-bind="friend.username"></span>
+
           <span ng-if="friend.hasUnread"
                 class="badge badge-info"><i class="fa fa-exclamation-circle"></i></span>
         </div>

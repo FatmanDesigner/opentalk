@@ -124,11 +124,16 @@ class ChannelHandler(ApiHandler):
 
     def update_user_presence_stats(self):
         users = self.application.db.find_users()
+        users_data_uri = {'data_uri': '/api/friends'}
         online_users = self.application.db.count_online_users()
+
+
         print('[ChannelHandler:update_user_presence_stats] Total online users: {}'.format(online_users))
 
         for item in users:
-            self.application.notify_waiter(item.user_id, 'notification', online_users=online_users)
+            self.application.notify_waiter(item.user_id, 'notification',
+                                           users_list=users_data_uri,
+                                           online_users_count=online_users)
 
 
 class FriendsHandler(ApiHandler):
@@ -143,7 +148,11 @@ class FriendsHandler(ApiHandler):
 
             self.write(json_encode({
                 'ok': True,
-                'users': [{ 'id': user.user_id, 'username': user.username } for user in users]
+                'users': [{
+                              'id': user.user_id,
+                              'username': user.username,
+                              'status': 'online' if user.status == User.STATUS_ONLINE else 'offline'
+                          } for user in users]
             }))
             return
         else:

@@ -57,7 +57,7 @@ function ConversationService ($sessionStorage, $http) {
 ConversationService.$inject = ['$sessionStorage', '$http'];
 app.service('conversationService', ConversationService);
 
-function ServerSentEventSource ($rootScope, $q) {
+function ServerSentEventSource ($rootScope, $q, $http) {
   let source;
 
   let dispose = null;
@@ -96,8 +96,31 @@ function ServerSentEventSource ($rootScope, $q) {
           break;
         case 'notification':
           console.log(`[onmessage] Notification...`, data);
-          handlers['notification'].forEach(handler => {
-            handler.apply(null, [data]);
+          let promises = [];
+          angular.forEach(data, function(item, index) {
+            let deferred = $q.defer();
+            promises.push(deferred.promise);
+
+            if (angular.isObject(item) && 'data_uri' in item) {
+              $http.get(item['data_uri']).then((response) => {
+               let { users } = response.data;
+               deferred.resolve({key: index, value: users});
+              });
+              return;
+            }
+
+            deferred.resolve({key: index, value: item});
+          });
+
+          $q.all(promises).then((results) => {
+            let data = results.reduce(function (acc, item) {
+              acc[item.key] = item.value;
+              return acc;
+            }, {});
+
+            handlers['notification'].forEach(handler => {
+              handler.apply(null, [data]);
+            });
           });
 
           break;
@@ -160,7 +183,7 @@ function ServerSentEventSource ($rootScope, $q) {
     }
   }
 }
-ServerSentEventSource.$inject = ['$rootScope', '$q'];
+ServerSentEventSource.$inject = ['$rootScope', '$q', '$http'];
 app.service('sse', ServerSentEventSource);
 
 function AuthenticationService ($http, $rootScope, $q, $sessionStorage, $state) {
@@ -240,6 +263,10 @@ function ChatroomCtrl ($rootScope, $scope, $element, $timeout, $sessionStorage, 
 
     fetchConversation(inbox, marker);
   });
+  sse.subscribe('notification', function onNotification (data) {
+    let usersList = data['users_list'];
+    $scope.friends = usersList;
+  });
   sse.connect();
 
   $scope.startChattingWithFriend = (friend) => {
@@ -300,7 +327,6 @@ function ChatroomCtrl ($rootScope, $scope, $element, $timeout, $sessionStorage, 
 
   function getFriendList () {
     $http.get(`/api/friends`).then((response) => {
-      console.log(response.data);
       let { users } = response.data;
 
       $scope.friends = users;
@@ -344,7 +370,7 @@ function HeaderDirective ($http, authService, sse) {
       scope.onlineUsers = 0;
 
       sse.subscribe('notification', function onNotification (data) {
-        scope.onlineUsers = data['online_users'];
+        scope.onlineUsers = data['online_users_count'];
       });
 
       sse.connect().then(() => {
