@@ -1,8 +1,9 @@
 from os import path, environ, makedirs
-from time import time
+from time import time, sleep
 import calendar
 import re
 
+from concurrent.futures import ThreadPoolExecutor
 from tornado.concurrent import Future
 from tornado.escape import json_decode, json_encode
 
@@ -84,7 +85,10 @@ class ChannelHandler(ApiHandler):
 
             type = result[0]
             data = result[1]
-            if type == 'inbox':
+
+            if type == 'heartbeat':
+                self.send_heart_beat()
+            elif type == 'inbox':
                 inbox = data['inbox']
                 marker = data['marker']
                 self.send_messages(inbox, marker)
@@ -101,6 +105,9 @@ class ChannelHandler(ApiHandler):
                 yield self.flush()
             except tornado.iostream.StreamClosedError as e:
                 break
+
+    def send_heart_beat(self):
+        self.write('event: heartbeat\ndata: {}\n\n'.format(int(time())))
 
     def send_messages(self, inbox, marker):
         print("Sending 'inbox' event to user")
@@ -247,8 +254,14 @@ class Application(web.Application):
         self.waiters = dict()
         self.waiter_results = dict()
 
+        self.heart_beat_executor = ThreadPoolExecutor(4)
+        self.is_heart_beating = False
+
     @gen.coroutine
     def wait(self, user):
+        if not self.is_heart_beating:
+            self.start_heart_beats()
+
         if user in self.waiters:
             yield self.waiters[user]
         future = Future()
@@ -276,26 +289,15 @@ class Application(web.Application):
 
         del self.waiters[user]
 
-    @gen.coroutine
-    def wait_for_inbox(self, inbox):
-        if not inbox in self.active_inboxes:
-            self.active_inboxes[inbox] = []
+    def start_heart_beats(self):
+        def send_heart_beat():
+            while self.is_heart_beating:
+                for user_id, future in self.waiters.items():
+                    future.set_result(('heartbeat', ))
+                sleep(30)
 
-        future = Future()
-        self.active_inboxes[inbox].append(future)
-
-        print('[Application.wait_for_inbox] Waiting for inbox {}'.format(inbox))
-        yield future
-
-    def notify_inbox(self, inbox):
-        if not inbox in self.active_inboxes:
-            print('[Application.notify_inbox] Inbox {} is not in active boxes. No op.'.format(inbox))
-            return
-
-        for future in self.active_inboxes[inbox]:
-            future.set_result(True)
-
-        self.active_inboxes[inbox].clear()
+        self.is_heart_beating = True
+        self.heart_beat_executor.submit(send_heart_beat)
 
 
 def make_app():
