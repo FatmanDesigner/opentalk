@@ -3,7 +3,7 @@
     <header ui-header toggle-friends="toggleRightSide()"></header>
     <div class="container">
       <div class="ui-chatroom row">
-        <div class="col-sm-4 hidden-xs">
+        <div class="col-sm-4" ng-class="{'hidden-xs': currentConversationID}">
           <div class="list-group friend-list">
             <header>The Crowd</header>
             <div ng-repeat="friend in friends"

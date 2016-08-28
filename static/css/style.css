@@ -175,21 +175,29 @@ html, body {
 .off-canvas {
 }
 
-.off-canvas > main {
-
-}
-
-.off-canvas.swiped-left > main:after {
+.off-canvas > main:after {
   content: "";
+
+  display: block;
   position: fixed;
   left: 0;
   top: 0;
   right: 0;
   bottom: 0;
 
-  display: block;
+  background-color: rgb(0,0,0);
+  opacity: 0;
 
-  background: rgba(0,0,0,0.7);
+  pointer-events: none;
+  -webkit-transition: opacity 300ms;
+  -moz-transition: opacity 300ms;
+  -ms-transition: opacity 300ms;
+  -o-transition: opacity 300ms;
+  transition: opacity 300ms;
+}
+
+.off-canvas.swiped-left > main:after {
+  opacity: 0.7;
 }
 
 .off-canvas > aside {
