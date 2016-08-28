@@ -83,8 +83,10 @@ function ServerSentEventSource ($rootScope, $q, $http) {
     source = new EventSource('/stream');
     disposeEventSource = function disposeEventSource() {
       deferred = null;
-      source.close();
-      source = null;
+      if (source) {
+        source.close();
+        source = null;
+      }
     };
 
     source.onerror = onerror;
@@ -447,7 +449,7 @@ app.filter('asDate', function () {
 });
 
 app.config(['$locationProvider', '$stateProvider', function ($locationProvider, $stateProvider) {
-  $locationProvider.html5Mode(false);
+  $locationProvider.html5Mode(true);
 
   $stateProvider.state('login', {
     url: '/',
@@ -457,6 +459,11 @@ app.config(['$locationProvider', '$stateProvider', function ($locationProvider, 
 
   $stateProvider.state('authorized', {
     url: '/chatroom',
+    onEnter: ['$state', 'authService', function ($state, authService) {
+      if (!authService.currentUser) {
+        $state.go('login');
+      }
+    }],
     templateUrl: '/chatroom.tpl.html',
     controller: ChatroomCtrl
   });

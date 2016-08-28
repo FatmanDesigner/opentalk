@@ -113,7 +113,7 @@ class ChannelHandler(ApiHandler):
 
     def on_connection_close(self):
         user = self.current_user
-        print("User {} has disconnected...".format(user))
+        print("[ChannelHandler:on_connection_close] User {} has disconnected...".format(user))
 
         self.application.cancel_wait(user)
         self.application.db.update_user(user, status=User.STATUS_OFFLINE)
@@ -227,6 +227,12 @@ class ConversationHandler(web.RequestHandler):
         yield self.flush()
 
 
+class RoutedStaticHandler(web.StaticFileHandler):
+
+    def parse_url_path(self, url_path):
+        return 'index.html'
+
+
 class Application(web.Application):
 
     def __init__(self, *args, **kwargs):
@@ -305,7 +311,8 @@ def make_app():
             (r"/api/friends", FriendsHandler),
             (r"/api/chats", ConversationHandler),
             (r"/stream", ChannelHandler),
-            (r"/(.*)", web.StaticFileHandler, {"path": static_dir, "default_filename": "index.html"}),
+            (r"/(.+\.(css|js|html))", web.StaticFileHandler, {"path": static_dir}),
+            (r"/(.*)", RoutedStaticHandler, {"path": static_dir, "default_filename": "index.html"}),
         ],
         debug=False,
         db=db,
